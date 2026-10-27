@@ -35,7 +35,25 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 - Xcode 27+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
-## Build and install
+## Installing a release
+
+Prebuilt builds for Apple silicon are on the [Releases](https://github.com/khalidabuhakmeh/amazon-music-mac/releases) page. Requires macOS 26.
+
+1. Download `AmazonMusic-<version>.dmg`, open it and drag **AmazonMusic** to **Applications**. Or download the `.zip`, unzip it and move the app to Applications.
+2. Open the app. macOS shows *"Apple could not verify 'AmazonMusic' is free of malware…"*. Click **Done**, not Move to Trash.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to the AmazonMusic message. Confirm with your password or Touch ID, then click **Open Anyway** again.
+
+You only need to do this once per downloaded version. Right-click → Open no longer bypasses this check on current macOS versions.
+
+Why the warning appears: the releases are ad-hoc signed and not notarized by Apple, because the project has no paid Apple Developer ID. Gatekeeper blocks any downloaded app that isn't notarized. The app is built from this repository by the [Release workflow](.github/workflows/release.yml), and `SHA256SUMS.txt` on each release lets you check the download.
+
+If macOS instead says the app *"is damaged and can't be opened"*, or Open Anyway doesn't appear, remove the quarantine flag in Terminal and open it again:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/AmazonMusic.app
+```
+
+## Build and install from source
 
 ```sh
 ./scripts/build.sh                    # Debug
@@ -43,7 +61,18 @@ CONFIG=Release ./scripts/build.sh     # Release
 cp -R build/Build/Products/Release/AmazonMusic.app /Applications/
 ```
 
-The app is ad-hoc signed and runs locally. If you copy it to another Mac, right-click and choose Open to get past Gatekeeper. Developer ID signing and notarization are not set up.
+The app is ad-hoc signed and runs locally. A copy built on your own Mac isn't quarantined, so Gatekeeper doesn't block it. Developer ID signing and notarization are not set up.
+
+## Publishing a release
+
+Push a version tag and the [Release workflow](.github/workflows/release.yml) builds the app on GitHub's Xcode 27 runner, then creates a GitHub Release with a `.dmg`, a `.zip` and checksums:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Running the workflow manually from the Actions tab builds the same files as a downloadable workflow artifact without creating a release.
 
 ## First run
 

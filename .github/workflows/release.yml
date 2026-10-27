@@ -1,0 +1,109 @@
+# Builds an ad-hoc signed (not notarized) Release of the app and publishes it as a GitHub Release.
+#   - Push a tag like v1.2.3 -> builds and creates the "v1.2.3" release with a .dmg and a .zip attached.
+#   - Run it manually (Actions -> Release -> Run workflow) -> builds and uploads the files as a workflow artifact only.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Xcode 27 image (arm64, public preview). The project targets macOS 26 and needs Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      APP_NAME: AmazonMusic
+      DISPLAY_NAME: Amazon Music
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION"
+
+      - name: Tools
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+
+      - name: JS tests
+        run: |
+          node tools/bridge-test/bridge.test.mjs
+          node tools/hidesections-test/hidesections.test.mjs
+
+      - name: Build (Release, ad-hoc signed)
+        run: |
+          xcodegen generate
+          set -o pipefail
+          xcodebuild -scheme "$APP_NAME" -configuration Release \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath build \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            build | xcbeautify
+
+      - name: Verify signature
+        run: |
+          APP="build/Build/Products/Release/$APP_NAME.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv "$APP" 2>&1 | grep -E "Signature|Identifier|flags"
+
+      - name: Package .zip and .dmg
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          APP="build/Build/Products/Release/$APP_NAME.app"
+          mkdir -p dist
+          ZIP="dist/$APP_NAME-$VERSION.zip"
+          DMG="dist/$APP_NAME-$VERSION.dmg"
+
+          # ditto keeps the code signature, extended attributes and symlinks intact.
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+
+          STAGE="$(mktemp -d)"
+          ditto "$APP" "$STAGE/$APP_NAME.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "$DISPLAY_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+
+          (cd dist && shasum -a 256 *.zip *.dmg > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AmazonMusic-${{ steps.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          Apple silicon (arm64), macOS 26 or later.
+
+          This build is **ad-hoc signed and not notarized** (there is no Apple Developer ID), so macOS will block it the first time you open it.
+          See [Installing a release](https://github.com/${{ github.repository }}/blob/main/README.md#installing-a-release) for the one-time steps to allow it.
+
+          Download the `.dmg` (drag the app to Applications) or the `.zip`. Checksums are in `SHA256SUMS.txt`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Amazon Music for Mac $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes
