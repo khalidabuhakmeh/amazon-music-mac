@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 struct MiniPlayerView: View {
+    /// Test/preview seams (default off): inject a cover image and force the hover state.
+    var coverOverride: NSImage?
+    var forceHover = false
     @Environment(PlayerState.self) private var player
     @Environment(PlayerBridge.self) private var bridge
     @Environment(\.openSettings) private var openSettings
@@ -16,7 +19,6 @@ struct MiniPlayerView: View {
         VStack(spacing: 2) {
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
-                LikeButton()
                 FooterIconButton(systemName: "arrow.up.forward.app", label: "Open Amazon Music") {
                     MainWindowCoordinator.shared.open()
                 }
@@ -46,7 +48,7 @@ struct MiniPlayerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .frame(height: CoverView.size)
 
-                CoverArt(track: track)
+                CoverArt(track: track, imageOverride: coverOverride, forceHover: forceHover)
             }
         }
         .padding(.horizontal, Self.padding)
@@ -120,18 +122,32 @@ private struct ControlSlot: View {
     }
 }
 
-/// Heart for the current track, shown in the top icon row. Hidden when the page exposes no like control (isLiked == nil).
-private struct LikeButton: View {
-    @Environment(PlayerState.self) private var player
+/// Heart badge overlaid on the cover's bottom-right corner. Hidden when the page exposes no like control (isLiked == nil).
+/// Liked: always visible, red. Not liked: white outline at ~55% opacity, full on hover.
+private struct LikeBadge: View {
+    let liked: Bool
+    let hovering: Bool
     @Environment(PlayerBridge.self) private var bridge
 
     var body: some View {
-        if let liked = player.isLiked {
-            FooterIconButton(systemName: liked ? "heart.fill" : "heart", label: liked ? "Unlike" : "Like",
-                             tint: liked ? .red : nil, value: liked ? "Liked" : "Not liked") {
-                Task { await bridge.toggleLike() }
-            }
+        Button { Task { await bridge.toggleLike() } } label: {
+            Image(systemName: liked ? "heart.fill" : "heart")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(liked ? Color.red : Color.white)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(.black.opacity(0.5)))
+                .background(Circle().fill(.ultraThinMaterial))
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .opacity(liked || hovering ? 1 : 0.7)
+        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .help(liked ? "Unlike" : "Like")
+        .accessibilityLabel(liked ? "Unlike" : "Like")
+        .accessibilityValue(liked ? "Liked" : "Not liked")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -185,13 +201,29 @@ private struct CoverView: View {
     }
 }
 
-/// Loads artwork for the track (via ArtworkCache); placeholder when nil.
+/// Loads artwork for the track (via ArtworkCache); placeholder when nil. Hosts the like badge.
 private struct CoverArt: View {
     let track: TrackInfo?
+    var imageOverride: NSImage?
+    var forceHover = false
+    @Environment(PlayerState.self) private var player
+    @Environment(PlayerBridge.self) private var bridge
     @State private var image: NSImage?
+    @State private var hovering = false
 
     var body: some View {
-        CoverView(image: image)
+        let liked = track == nil ? nil : player.isLiked
+        CoverView(image: imageOverride ?? image)
+            .overlay(alignment: .bottomTrailing) {
+                if let liked {
+                    LikeBadge(liked: liked, hovering: hovering || forceHover)
+                        .padding(.trailing, 3).padding(.bottom, 3)
+                }
+            }
+            .onHover { hovering = $0 }
+            .onTapGesture(count: 2) {
+                if liked != nil { Task { await bridge.toggleLike() } }
+            }
             .task(id: track?.artworkURL) {
                 image = nil
                 guard let url = track?.artworkURL else { return }
@@ -329,6 +361,15 @@ private struct MiniProgress: View {
 #Preview("Paused") {
     let (s, b) = previewModel(track: true, playing: false, liked: false, shuffle: false, repeatMode: .off)
     MiniPlayerView().environment(s).environment(b)
+}
+#Preview("Heart overlay: liked / not liked") {
+    let a = previewModel(track: true, playing: true, liked: true)
+    let b = previewModel(track: true, playing: true, liked: false)
+    VStack(spacing: 0) {
+        MiniPlayerView().environment(a.0).environment(a.1)
+        MiniPlayerView(forceHover: true).environment(b.0).environment(b.1)
+        MiniPlayerView().environment(b.0).environment(b.1)
+    }
 }
 #Preview("No track") {
     let (s, b) = previewModel(track: false, playing: false)
