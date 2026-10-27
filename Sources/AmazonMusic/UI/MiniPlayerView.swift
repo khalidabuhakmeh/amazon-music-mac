@@ -7,53 +7,37 @@ struct MiniPlayerView: View {
     var forceHover = false
     @Environment(PlayerState.self) private var player
     @Environment(PlayerBridge.self) private var bridge
-    @Environment(\.openSettings) private var openSettings
 
     static let width: CGFloat = 340
     private static let padding: CGFloat = 14
 
-    private static let iconRow: CGFloat = 24
-
     var body: some View {
         let track = player.bridgeHealthy ? player.track : nil
-        VStack(spacing: 2) {
-            HStack(spacing: 10) {
-                Spacer(minLength: 0)
-                FooterIconButton(systemName: "arrow.up.forward.app", label: "Open Amazon Music") {
-                    MainWindowCoordinator.shared.open()
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
+                if let track {
+                    MiniTitleBlock(track: track)
+                } else {
+                    MiniPlaceholderText()
                 }
-                FooterIconButton(systemName: "gearshape", label: "Settings") {
-                    NSApp.activate(); openSettings()
+                Spacer(minLength: 4)
+                if let track {
+                    MiniProgress(track: track)
+                } else {
+                    Button("Open Amazon Music") { MainWindowCoordinator.shared.open() }
+                        .buttonStyle(.link).font(.system(size: 12))
+                        .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
                 }
+                Spacer(minLength: 4)
+                controls(enabled: track != nil)
             }
-            .frame(height: Self.iconRow)
-            .padding(.trailing, -7) // glyph edge aligns with the cover's right edge
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(height: CoverView.size)
 
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let track {
-                        MiniTitleBlock(track: track)
-                    } else {
-                        MiniPlaceholderText()
-                    }
-                    Spacer(minLength: 4)
-                    if let track {
-                        MiniProgress(track: track)
-                    } else {
-                        Color.clear.frame(height: 14)
-                    }
-                    Spacer(minLength: 4)
-                    controls(enabled: track != nil)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .frame(height: CoverView.size)
-
-                CoverArt(track: track, imageOverride: coverOverride, forceHover: forceHover)
-            }
+            CoverArt(track: track, imageOverride: coverOverride, forceHover: forceHover)
         }
         .padding(.horizontal, Self.padding)
-        .padding(.top, 8)
-        .padding(.bottom, 14)
+        .padding(.vertical, Self.padding)
         .frame(width: Self.width)
         .background {
             // MenuBarExtra's own material is very translucent; add an opaque-ish layer so text behind doesn't bleed through.
@@ -161,32 +145,6 @@ private struct LikeBadge: View {
         .accessibilityLabel(liked ? "Unlike" : "Like")
         .accessibilityValue(liked ? "Liked" : "Not liked")
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-private struct FooterIconButton: View {
-    let systemName: String
-    let label: String
-    var tint: Color?
-    var value: String?
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12))
-                .foregroundStyle(tint ?? (hovering ? Color.primary : Color.secondary))
-                .frame(width: 26, height: 24)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.primary.opacity(hovering ? 0.10 : 0)))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(label)
-        .accessibilityLabel(label)
-        .accessibilityValue(value ?? "")
     }
 }
 
