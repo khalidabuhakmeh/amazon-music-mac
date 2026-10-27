@@ -1,0 +1,7 @@
+*.xcodeproj
+build/
+DerivedData/
+.DS_Store
+.weave/
+*.jsonl
+xcuserdata/

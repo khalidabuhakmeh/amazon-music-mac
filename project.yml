@@ -1,0 +1,56 @@
+name: AmazonMusic
+options:
+  deploymentTarget: {macOS: "26.0"}
+settings:
+  base:
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    SWIFT_VERSION: 6
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    # No DEVELOPMENT_TEAM: Developer ID signing is Task 13.
+    ENABLE_HARDENED_RUNTIME: YES
+    # Debug: hardened runtime library validation blocks loading the ad-hoc signed test bundle
+    ENABLE_HARDENED_RUNTIME[config=Debug]: NO
+    OTHER_CODE_SIGN_FLAGS[config=Release]: "--options=runtime"
+    ENABLE_DEBUG_DYLIB: NO
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS[config=Release]: NO
+targets:
+  AmazonMusic:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/AmazonMusic
+        excludes: ["Resources/AmazonMusic.entitlements"]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.khalidabuhakmeh.amazonmusic
+        PRODUCT_NAME: AmazonMusic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Amazon Music
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.music
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Sources/AmazonMusic/Resources/AmazonMusic.entitlements
+    entitlements:
+      path: Sources/AmazonMusic/Resources/AmazonMusic.entitlements
+      properties:
+        com.apple.security.network.client: true
+  AmazonMusicTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests/AmazonMusicTests]
+    dependencies:
+      - target: AmazonMusic
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.khalidabuhakmeh.amazonmusic.tests
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/AmazonMusic.app/Contents/MacOS/AmazonMusic
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  AmazonMusic:
+    build:
+      targets: {AmazonMusic: all, AmazonMusicTests: [test]}
+    test:
+      targets: [AmazonMusicTests]
