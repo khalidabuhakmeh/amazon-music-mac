@@ -19,6 +19,16 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 - Keeps playing when the window is closed
 - Settings: hide podcasts, hide Audible, hide the "Get App" button, hide the Home banner, region/start URL, user-agent override, reset website data
 
+## Screenshots
+
+![Main window showing the Amazon Music Home page](docs/screenshots/main-window.png)
+
+| Menu bar mini player | Dock menu |
+| --- | --- |
+| <img src="docs/screenshots/menu-bar-player.png" alt="Menu bar mini player with cover, progress and playback controls" width="340"> | <img src="docs/screenshots/dock-menu.png" alt="Dock menu with now playing, Pause, Next and Previous" width="190"> |
+
+<img src="docs/screenshots/settings.png" alt="Settings window with hide podcasts, Audible, Get App and Home banner toggles" width="480">
+
 ## Requirements
 
 - macOS 26
