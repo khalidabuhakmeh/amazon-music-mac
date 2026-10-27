@@ -55,6 +55,14 @@ struct MiniPlayerView: View {
         .padding(.top, 8)
         .padding(.bottom, 14)
         .frame(width: Self.width)
+        .background {
+            // MenuBarExtra's own material is very translucent; add an opaque-ish layer so text behind doesn't bleed through.
+            ZStack {
+                Rectangle().fill(.thickMaterial)
+                Color(nsColor: .windowBackgroundColor).opacity(0.7)
+            }
+            .ignoresSafeArea()
+        }
     }
 
     /// One row of five evenly spread slots, like Amazon Music's own player bar:
@@ -64,7 +72,7 @@ struct MiniPlayerView: View {
         let mode = player.repeatMode
         return HStack(spacing: 0) {
             ControlSlot(symbol: mode == .one ? "repeat.1" : "repeat", size: 14,
-                        tint: Self.toggleTint(on: mode.map { $0 != .off }),
+                        tint: Self.toggleTint(on: mode.map { $0 != .off }), isOn: mode.map { $0 != .off } == true,
                         label: "Repeat", value: Self.repeatValue(mode), help: Self.repeatHelp(mode),
                         enabled: enabled && mode != nil) { Task { await bridge.cycleRepeat() } }
             ControlSlot(symbol: "backward.end.fill", size: 16, label: "Previous track", help: "Previous track",
@@ -74,7 +82,7 @@ struct MiniPlayerView: View {
                         enabled: enabled) { Task { await bridge.send(.toggle) } }
             ControlSlot(symbol: "forward.end.fill", size: 16, label: "Next track", help: "Next track",
                         enabled: enabled) { Task { await bridge.send(.next) } }
-            ControlSlot(symbol: "shuffle", size: 14, tint: Self.toggleTint(on: shuffled),
+            ControlSlot(symbol: "shuffle", size: 14, tint: Self.toggleTint(on: shuffled), isOn: shuffled == true,
                         label: "Shuffle", value: shuffled.map { $0 ? "On" : "Off" },
                         help: shuffled == true ? "Shuffle: on (click to turn off)" : "Shuffle: off (click to turn on)",
                         enabled: enabled && shuffled != nil) { Task { await bridge.toggleShuffle() } }
@@ -82,8 +90,8 @@ struct MiniPlayerView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// On = accent at full opacity; off/unknown = secondary at ~50%.
-    private static func toggleTint(on: Bool?) -> Color { on == true ? .accentColor : Color.secondary.opacity(0.5) }
+    /// On = accent at full opacity; off = primary at ~62%; unknown/disabled is dimmed further by ControlSlot.
+    private static func toggleTint(on: Bool?) -> Color { on == true ? .accentColor : Color.primary.opacity(0.62) }
     private static func repeatValue(_ m: RepeatMode?) -> String? { m.map { ["off": "Off", "all": "All", "one": "One"][$0.rawValue] ?? "" } }
     private static func repeatHelp(_ m: RepeatMode?) -> String {
         switch m {
@@ -99,6 +107,7 @@ private struct ControlSlot: View {
     let symbol: String
     let size: CGFloat
     var tint: Color = .primary
+    var isOn = false
     let label: String
     var value: String?
     let help: String
@@ -111,11 +120,15 @@ private struct ControlSlot: View {
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(maxWidth: .infinity, minHeight: 30)
+                .overlay(alignment: .bottom) {
+                    // State indicator that doesn't rely on colour alone.
+                    Circle().fill(Color.accentColor).frame(width: 4, height: 4).opacity(isOn ? 1 : 0)
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
+        .opacity(enabled ? 1 : 0.3)
         .help(help)
         .accessibilityLabel(label)
         .accessibilityValue(value ?? "")
@@ -237,7 +250,7 @@ private struct MiniPlaceholderText: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Nothing playing").font(.system(size: 19, weight: .semibold))
                 .lineLimit(2)
-            Text("Open the main window to sign in").font(.system(size: 14)).foregroundStyle(.secondary)
+            Text("Open the main window to sign in").font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -255,20 +268,21 @@ private struct MiniTitleBlock: View {
                 .lineLimit(2).truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
             Text(track.artist ?? "")
-                .font(.system(size: 14)).foregroundStyle(.secondary)
+                .font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
                 .lineLimit(1).truncationMode(.tail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Slim custom scrubber (4pt track). Only this view re-renders on the timeline;
+/// Custom scrubber (6pt track, knob on hover/drag). Only this view re-renders on the timeline;
 /// the schedule is paused while not playing or while scrubbing.
 private struct MiniProgress: View {
     let track: TrackInfo
     @Environment(PlayerState.self) private var player
     @Environment(PlayerBridge.self) private var bridge
     @State private var scrub: Double?
+    @State private var barHover = false
 
     var body: some View {
         let duration = max(track.duration ?? 0, 0)
@@ -280,7 +294,7 @@ private struct MiniProgress: View {
                 Text(duration > 0 ? "-" + Self.format(max(0, duration - pos)) : "--:--")
                     .frame(minWidth: 28, alignment: .trailing)
             }
-            .font(.system(size: 10).monospacedDigit()).foregroundStyle(.secondary)
+            .font(.system(size: 10).monospacedDigit()).foregroundStyle(.primary.opacity(0.7))
         }
     }
 
@@ -289,9 +303,14 @@ private struct MiniProgress: View {
             let w = max(geo.size.width, 1)
             let frac = duration > 0 ? CGFloat(min(max(pos / duration, 0), 1)) : 0
             ZStack(alignment: .leading) {
-                Capsule().fill(.primary.opacity(0.15)).frame(height: 4)
-                Capsule().fill(.primary.opacity(0.6)).frame(width: w * frac, height: 4)
+                Capsule().fill(Color.primary.opacity(0.3)).frame(height: 6)
+                Capsule().fill(Color.primary).frame(width: w * frac, height: 6)
+                Circle().fill(Color.primary).frame(width: 12, height: 12)
+                    .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
+                    .offset(x: min(max(w * frac - 6, 0), w - 12))
+                    .opacity(barHover || scrub != nil ? 1 : 0)
             }
+            .onHover { barHover = $0 }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
