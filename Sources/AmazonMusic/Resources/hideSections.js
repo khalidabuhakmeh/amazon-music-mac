@@ -4,7 +4,7 @@
 // DOM findings behind these selectors: docs/PODCASTS.md.
 (function () {
   "use strict";
-  const HIDE_SECTIONS_VERSION = "4.0.0";
+  const HIDE_SECTIONS_VERSION = "4.1.0";
 
   // The ONLY place DOM knowledge lives. Prefer data-testid / href / aria-label over class names
   // (classes are hashed react-native-web atoms and change between builds).
@@ -216,6 +216,35 @@
         mark(shelfFor(h), id);
       }
     });
+    hideEmptiedShelves(id);
+  }
+
+  // A shelf whose cards were ALL hidden (e.g. "True Crime Editor's Picks" on Home holding only podcasts) would remain as
+  // an empty heading + "See More" row, so the whole shelf is hidden too. Mixed shelves (some visible cards) are kept.
+  function isHiddenByAny(el) {
+    return IDS.some((sid) => {
+      const a = "[" + attrOf(sid) + "]";
+      return safe(() => el.matches(a) || !!el.closest(a) || !!el.querySelector(a), false);
+    });
+  }
+  function shelfCards(shelf) {
+    for (const s of RULES.cardContainers) {
+      const found = all(shelf, s).filter((c) => !safe(() => c.parentElement && c.parentElement.closest(s) && shelf.contains(c.parentElement.closest(s)), false));
+      if (found.length) return found;
+    }
+    return [];
+  }
+  function hideEmptiedShelves(id) {
+    const own = "[" + attrOf(id) + "]";
+    leafHeadings(document).forEach((h) => safe(() => {
+      const shelf = shelfFor(h);
+      if (!shelf || shelf === h || shelf.hasAttribute(attrOf(id))) return;
+      const cards = shelfCards(shelf);
+      if (!cards.length || !cards.every(isHiddenByAny)) return;
+      // Attribute the shelf to this section only if it hid at least one of the cards (so disabling it restores the shelf).
+      if (!cards.some((c) => safe(() => c.matches(own) || !!c.closest(own) || !!c.querySelector(own), false))) return;
+      mark(shelf, id);
+    }));
   }
 
   function scan() {

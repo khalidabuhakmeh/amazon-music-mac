@@ -55,6 +55,7 @@ future loads) + `applyHideSections()` (`setEnabled` per section on the current p
 - `/explore` rendered almost nothing (13 elements) in the headless sample: Browse/Explore page not sampled. Home shelves for podcasts not seen.
 - Localised headings/regions other than en are heuristic only.
 - Mixed-content shelves (e.g. a "Recommended" shelf holding a few podcast cards) have only the podcast cards removed, which may leave a gap.
+- Shelves whose cards are *all* hidden (e.g. Home "True Crime Editor's Picks" / "Comedy Editor's Picks", which hold only podcasts) are hidden as a whole, heading and "See More" included (`hideEmptiedShelves`, v4.1.0). The shelf is attributed to the section that hid its cards, so turning that toggle off restores it.
 - Search results may leave a podcast row that is not a link (none observed).
 - If Amazon renames testids (`TopNavBar_PodcastTab`, `SearchResultsWidget_Podcast*`, `SearchResultsTypeFilter_Pill_podcast*`) update `RULES`.
 
