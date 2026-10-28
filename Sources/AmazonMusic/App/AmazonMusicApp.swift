@@ -51,7 +51,7 @@ struct AmazonMusicApp: App {
                 .environment(player)
                 .environment(bridge)
         } label: {
-            Image(systemName: player.isPlaying ? "music.note.list" : "music.note")
+            Image(nsImage: MenuBarIcon.image)
         }
         .menuBarExtraStyle(.window)
 

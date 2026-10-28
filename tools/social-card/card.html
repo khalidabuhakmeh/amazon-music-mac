@@ -1,0 +1,107 @@
+<!doctype html>
+<!--
+  Social preview card (1280x640). Regenerate with:
+    ./tools/social-card/render.sh
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+    color: #fff;
+    background:
+      radial-gradient(900px 600px at 0% 0%, rgba(94, 234, 212, 0.18), transparent 60%),
+      radial-gradient(800px 600px at 100% 100%, rgba(168, 85, 247, 0.30), transparent 60%),
+      radial-gradient(600px 500px at 70% 10%, rgba(59, 130, 246, 0.18), transparent 60%),
+      linear-gradient(160deg, #1b1a45 0%, #120f33 55%, #0a0820 100%);
+    position: relative;
+  }
+  /* subtle equalizer motif in the background */
+  .bars {
+    position: absolute; left: 60px; bottom: -40px;
+    display: flex; gap: 22px; align-items: flex-end; opacity: 0.07;
+  }
+  .bars span { width: 34px; border-radius: 17px; background: #fff; }
+
+  .left {
+    position: absolute; left: 80px; top: 0; bottom: 40px; width: 600px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .icon {
+    width: 112px; height: 112px; margin-left: -10px; margin-bottom: 14px;
+    filter: drop-shadow(0 18px 40px rgba(94, 234, 212, 0.25));
+  }
+  .eyebrow {
+    font-size: 17px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #8be9e0; margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 74px; line-height: 1.0; font-weight: 800; letter-spacing: -0.03em;
+  }
+  h1 .grad {
+    background: linear-gradient(90deg, #a5f3fc 0%, #93c5fd 45%, #d8b4fe 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tagline {
+    margin-top: 20px; font-size: 25px; line-height: 1.35; font-weight: 400;
+    color: rgba(255, 255, 255, 0.72); max-width: 540px;
+  }
+  .chips { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; max-width: 620px; }
+  .chip {
+    font-size: 15px; font-weight: 600; padding: 7px 13px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .repo {
+    position: absolute; left: 80px; bottom: 36px; font-size: 17px; font-weight: 500;
+    color: rgba(255, 255, 255, 0.5); display: flex; align-items: center; gap: 8px;
+  }
+  .repo svg { width: 18px; height: 18px; fill: rgba(255, 255, 255, 0.5); }
+
+  /* screenshots */
+  .shot {
+    position: absolute; border-radius: 16px; overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+  .shot img { display: block; width: 100%; }
+  .main {
+    left: 720px; top: 70px; width: 640px;
+    transform: perspective(1600px) rotateY(-10deg) rotateX(2deg);
+    transform-origin: left center;
+    opacity: 0.9;
+  }
+  .player {
+    left: 770px; top: 215px; width: 310px; border-radius: 18px;
+    box-shadow: 0 50px 90px rgba(0, 0, 0, 0.7), 0 0 60px rgba(168, 85, 247, 0.25);
+  }
+  .player img { margin-bottom: -2px; }
+</style>
+</head>
+<body>
+
+  <div class="shot main"><img src="../../docs/screenshots/main-window.png"></div>
+  <div class="shot player"><img src="../../docs/screenshots/menu-bar-player.png"></div>
+
+  <div class="left">
+    <img class="icon" src="../icon/master_1024.png">
+    <div class="eyebrow">Unofficial · Native for Apple silicon</div>
+    <h1>Amazon Music<br><span class="grad">for Mac</span></h1>
+    <p class="tagline">The web player, wrapped in a real macOS app — with the integration it was missing.</p>
+    <div class="chips">
+      <span class="chip">Media keys</span>
+      <span class="chip">Control Center</span>
+      <span class="chip">Menu bar player</span>
+      <span class="chip">Up Next queue</span>
+    </div>
+  </div>
+
+  <div class="repo">
+    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    github.com/khalidabuhakmeh/amazon-music-mac
+  </div>
+</body>
+</html>
