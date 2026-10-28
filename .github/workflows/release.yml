@@ -24,7 +24,7 @@ jobs:
       APP_NAME: AmazonMusic
       DISPLAY_NAME: Amazon Music
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version
         id: version
@@ -84,7 +84,7 @@ jobs:
           cat dist/SHA256SUMS.txt
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: AmazonMusic-${{ steps.version.outputs.version }}
           path: dist/*
