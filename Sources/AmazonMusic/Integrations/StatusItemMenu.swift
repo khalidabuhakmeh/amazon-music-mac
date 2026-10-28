@@ -1,7 +1,7 @@
 import AppKit
 
 enum StatusMenuAction: String, Sendable, Equatable {
-    case playPause, next, previous, toggleLike, toggleShuffle, cycleRepeat, openApp, settings, quit
+    case playPause, next, previous, toggleLike, toggleShuffle, cycleRepeat, playSimilar, openApp, settings, quit
 }
 
 struct StatusMenuItemModel: Equatable, Sendable {
@@ -14,7 +14,7 @@ struct StatusMenuItemModel: Equatable, Sendable {
 
 /// Pure builder for the menu bar item's right-click menu.
 enum StatusMenuModel {
-    static func build(isPlaying: Bool, isLiked: Bool? = nil, isShuffled: Bool? = nil, repeatMode: RepeatMode? = nil) -> [StatusMenuItemModel] {
+    static func build(isPlaying: Bool, isLiked: Bool? = nil, isShuffled: Bool? = nil, repeatMode: RepeatMode? = nil, canPlaySimilar: Bool = false) -> [StatusMenuItemModel] {
         var items: [StatusMenuItemModel] = [
             .init(title: isPlaying ? "Pause" : "Play", action: .playPause),
             .init(title: "Next", action: .next),
@@ -27,6 +27,7 @@ enum StatusMenuModel {
             let title = switch repeatMode.next { case .all: "Repeat All"; case .one: "Repeat One"; case .off: "Turn Repeat Off" }
             items.append(.init(title: title, action: .cycleRepeat))
         }
+        if canPlaySimilar { items.append(.init(title: "Play Similar Music", action: .playSimilar)) }
         items += [
             .separator,
             .init(title: "Open Amazon Music", action: .openApp),
@@ -48,14 +49,16 @@ final class StatusItemMenuController: NSObject {
     private let isLiked: () -> Bool?
     private let isShuffled: () -> Bool?
     private let repeatMode: () -> RepeatMode?
+    private let canPlaySimilar: () -> Bool
     private let perform: (StatusMenuAction) -> Void
 
     init(isPlaying: @escaping () -> Bool, isLiked: @escaping () -> Bool? = { nil },
-         isShuffled: @escaping () -> Bool? = { nil }, repeatMode: @escaping () -> RepeatMode? = { nil }, perform: @escaping (StatusMenuAction) -> Void) {
+         isShuffled: @escaping () -> Bool? = { nil }, repeatMode: @escaping () -> RepeatMode? = { nil }, canPlaySimilar: @escaping () -> Bool = { false }, perform: @escaping (StatusMenuAction) -> Void) {
         self.isPlaying = isPlaying
         self.isLiked = isLiked
         self.isShuffled = isShuffled
         self.repeatMode = repeatMode
+        self.canPlaySimilar = canPlaySimilar
         self.perform = perform
         super.init()
     }
@@ -88,7 +91,7 @@ final class StatusItemMenuController: NSObject {
         let menu = NSMenu()
         menu.autoenablesItems = false
         for m in StatusMenuModel.build(isPlaying: isPlaying(), isLiked: isLiked(),
-                                           isShuffled: isShuffled(), repeatMode: repeatMode()) {
+                                           isShuffled: isShuffled(), repeatMode: repeatMode(), canPlaySimilar: canPlaySimilar()) {
             guard let a = m.action else { menu.addItem(.separator()); continue }
             let item = NSMenuItem(title: m.title, action: #selector(invoke(_:)), keyEquivalent: m.keyEquivalent)
             item.target = self

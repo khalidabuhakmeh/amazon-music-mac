@@ -12,13 +12,14 @@ struct MiniPlayerView: View {
     private static let padding: CGFloat = 14
 
     var body: some View {
-        let track = player.bridgeHealthy ? player.track : nil
+        let track = player.popoverMode == .track ? player.track : nil
+        VStack(spacing: 0) {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 0) {
                 if let track {
                     MiniTitleBlock(track: track)
                 } else {
-                    MiniPlaceholderText()
+                    MiniPlaceholderText(signedOut: player.popoverMode == .signedOut)
                 }
                 Spacer(minLength: 4)
                 if let track {
@@ -38,7 +39,12 @@ struct MiniPlayerView: View {
         }
         .padding(.horizontal, Self.padding)
         .padding(.vertical, Self.padding)
+        if track != nil, !player.upNext.isEmpty {
+            UpNextSection(items: player.upNext)
+        }
+        }
         .frame(width: Self.width)
+        .onAppear { Task { await bridge.send(.refreshQueue) } }
         .background {
             // MenuBarExtra's own material is very translucent; add an opaque-ish layer so text behind doesn't bleed through.
             ZStack {
@@ -82,6 +88,145 @@ struct MiniPlayerView: View {
         case .some(.off), .none: "Repeat: off (click to repeat all)"
         case .some(.all): "Repeat: all (click to repeat one)"
         case .some(.one): "Repeat: one (click to turn off)"
+        }
+    }
+}
+
+/// Collapsible "Up Next" queue at the bottom of the popover. Collapsed: the very next song in one row with a chevron.
+/// Expanded: header + up to 10 upcoming songs (scrolls past ~5 rows). Expanded state persists (UserDefaults). Not shown without data.
+/// Row identity for Up Next: the queue entry id (so a pending spinner stays with its song when the list shifts); position only as a fallback.
+enum UpNextRowKeys {
+    static func keyed(_ items: [BridgeMessage.QueueItem]) -> [(key: String, item: BridgeMessage.QueueItem)] {
+        var seen = Set<String>()
+        return items.prefix(10).enumerated().map { offset, item in
+            var key = item.id ?? "pos-\(offset)"
+            if !seen.insert(key).inserted { key = "pos-\(offset)-dup"; seen.insert(key) }
+            return (key, item)
+        }
+    }
+}
+
+private struct UpNextSection: View {
+    let items: [BridgeMessage.QueueItem]
+    @AppStorage("upNextExpanded") private var expanded = false
+    @Environment(PlayerState.self) private var player
+    @Environment(PlayerBridge.self) private var bridge
+    private static let rowHeight: CGFloat = 36
+    private static let maxVisibleRows: CGFloat = 5.5
+
+    /// Rows start their song when the page can jump to a queue entry; otherwise they behave as before (collapsed row toggles).
+    private func playable(_ item: BridgeMessage.QueueItem) -> Bool { player.canJumpToQueueItem && item.id != nil }
+    private func play(_ item: BridgeMessage.QueueItem) { if let id = item.id { Task { await bridge.playQueueItem(id) } } }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider().opacity(0.6)
+            if expanded {
+                header
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(UpNextRowKeys.keyed(items), id: \.key) { row in
+                            UpNextRow(item: row.item, playable: playable(row.item), pending: player.isJumpPending(row.item.id)) { play(row.item) }
+                                .frame(height: Self.rowHeight)
+                        }
+                    }
+                }
+                .frame(height: min(CGFloat(min(items.count, 10)) * Self.rowHeight, Self.rowHeight * Self.maxVisibleRows))
+                .padding(.bottom, 6)
+            } else if let first = items.first {
+                // Split: the song plays, the chevron toggles (whole row toggles when jumping isn't available).
+                HStack(spacing: 0) {
+                    UpNextRow(item: first, showsLabel: true, playable: playable(first), pending: player.isJumpPending(first.id),
+                              onPlay: playable(first) ? { play(first) } : { toggle() })
+                        .padding(.leading, 14)
+                    Button { toggle() } label: {
+                        chevron.frame(width: 40, height: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show upcoming songs")
+                    .accessibilityLabel("Show upcoming songs")
+                    .accessibilityValue("Collapsed")
+                }
+                .frame(height: 44)
+            }
+        }
+    }
+
+    private var header: some View {
+        Button { toggle() } label: {
+            HStack {
+                Text("Up Next").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary.opacity(0.65))
+                Spacer()
+                chevron
+            }
+            .padding(.horizontal, 14).frame(height: 30).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Hide upcoming songs")
+        .accessibilityLabel("Up Next")
+        .accessibilityValue("Expanded")
+        .accessibilityHint("Hides the upcoming songs")
+    }
+
+    private var chevron: some View {
+        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.primary.opacity(0.6))
+    }
+
+    private func toggle() { withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() } }
+}
+
+/// One upcoming song. When `playable`, the whole row is a button that plays it (hover highlight, "Play <title>" tooltip,
+/// dimmed with a spinner while `pending`). When not playable the row is passed `onPlay` only for the collapsed toggle fallback.
+private struct UpNextRow: View {
+    let item: BridgeMessage.QueueItem
+    var showsLabel = false
+    var playable = false
+    var pending = false
+    var onPlay: () -> Void = {}
+    @State private var image: NSImage?
+    @State private var hovering = false
+
+    var body: some View {
+        let content = HStack(spacing: 10) {
+            Group {
+                if let image { Image(nsImage: image).resizable().scaledToFill() }
+                else { ZStack { Rectangle().fill(.quaternary); Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.secondary) } }
+            }
+            .frame(width: 28, height: 28)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
+                if let artist = item.artist {
+                    Text(artist).font(.system(size: 11)).foregroundStyle(.primary.opacity(0.65)).lineLimit(1).truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if pending { ProgressView().controlSize(.small) }
+            else if playable && hovering { Image(systemName: "play.fill").font(.system(size: 10)).foregroundStyle(.primary.opacity(0.7)) }
+        }
+        .padding(.horizontal, showsLabel ? 4 : 14)
+        .frame(maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(playable && hovering && !pending ? 0.08 : 0)))
+        .opacity(pending ? 0.55 : 1)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .task(id: item.artworkURL) {
+            // Keep the previous image until the new one loads (no flicker when the queue shifts); clear only if there is no artwork.
+            guard let url = item.artworkURL else { image = nil; return }
+            if let loaded = await ArtworkCache.shared.image(for: url) { image = loaded }
+        }
+        if playable || showsLabel {
+            Button(action: onPlay) { content }
+                .buttonStyle(.plain)
+                .disabled(pending)
+                .help(playable ? "Play \(item.title)" : "Show upcoming songs")
+                .accessibilityLabel(playable ? "Play \(item.title)" : "Up next: \(item.title)")
+                .accessibilityValue(pending ? "Starting" : "")
+                .accessibilityHint(playable ? "Skips to this song" : "Shows the upcoming songs")
+        } else {
+            content
         }
     }
 }
@@ -148,6 +293,38 @@ private struct LikeBadge: View {
     }
 }
 
+/// "Play Similar Music" badge on the cover's top-left corner, the mirror of `LikeBadge` (same size, backing, padding, hover treatment).
+/// Shown only when a track is loaded and the page says the action is available. Spinner while it runs.
+private struct SimilarBadge: View {
+    let hovering: Bool
+    @Environment(PlayerState.self) private var player
+    @Environment(PlayerBridge.self) private var bridge
+
+    var body: some View {
+        let busy = player.similarPending != nil
+        Button { Task { await bridge.playSimilar() } } label: {
+            Group {
+                if busy { ProgressView().controlSize(.small).tint(.white).colorScheme(.dark) }
+                else { Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.white) }
+            }
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(.black.opacity(0.5)))
+            .background(Circle().fill(.ultraThinMaterial))
+            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+            .frame(width: 36, height: 36)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .opacity(busy || hovering ? 1 : 0.7)
+        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .help("Play Similar Music")
+        .accessibilityLabel("Play Similar Music")
+        .accessibilityValue(busy ? "Starting" : "")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 /// Rounded cover with subtle border/shadow; placeholder glyph when there is no image.
 private struct CoverView: View {
     let image: NSImage?
@@ -191,6 +368,12 @@ private struct CoverArt: View {
                         .padding(.trailing, 3).padding(.bottom, 3)
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if track != nil, player.canPlaySimilar {
+                    SimilarBadge(hovering: hovering || forceHover)
+                        .padding(.leading, 3).padding(.top, 3)
+                }
+            }
             .onHover { hovering = $0 }
             .onTapGesture(count: 2) {
                 if liked != nil { Task { await bridge.toggleLike() } }
@@ -204,11 +387,13 @@ private struct CoverArt: View {
 }
 
 private struct MiniPlaceholderText: View {
+    /// Sign-in wording only when the page says the user is signed out; otherwise a hint to pick something to play.
+    var signedOut = false
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Nothing playing").font(.system(size: 19, weight: .semibold))
                 .lineLimit(2)
-            Text("Open the main window to sign in").font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
+            Text(signedOut ? "Open the main window to sign in" : "Pick something to play in Amazon Music").font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -315,6 +500,12 @@ private struct MiniProgress: View {
     return (s, PlayerBridge(state: s))
 }
 
+#Preview("Up Next (collapsed/expanded persisted state)") {
+    let (s, b) = previewModel(track: true, playing: true, liked: false, shuffle: false, repeatMode: .off)
+    s.apply(.state(.init(trackId: "t1", title: "Now", artist: "Artist", album: "A", artworkURL: nil, duration: 245, position: 83, isPlaying: true,
+                         queue: (1...10).map { .init(title: "Upcoming song \($0)", artist: "Artist \($0)", artworkURL: nil) })))
+    return MiniPlayerView().environment(s).environment(b)
+}
 #Preview("Playing, shuffle on, repeat all") {
     let (s, b) = previewModel(track: true, playing: true, liked: false, shuffle: true, repeatMode: .all)
     MiniPlayerView().environment(s).environment(b)

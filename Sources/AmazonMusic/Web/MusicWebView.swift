@@ -57,6 +57,8 @@ final class WebController {
     func addMessageHandler(_ handler: WKScriptMessageHandler, name: String) {
         configuration.userContentController.add(handler, name: name)
     }
+    /// Host of the configured start URL (lowercased), for bridge origin checks.
+    var startHost: String? { URLComponents(string: settings.startURL)?.host?.lowercased() }
     func evaluate(_ js: String) async throws -> Any? { try await webView.evaluateJavaScript(js) }
     /// Runs `body` as an async function body in the page world (awaits Promises) and returns its value.
     /// Commands return a JSON string so bridging to Swift never depends on JS object/Promise conversion.

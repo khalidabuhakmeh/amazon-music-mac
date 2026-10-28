@@ -127,3 +127,40 @@ Play an album/playlist with several tracks first (skip limits on free tiers may 
 - [ ] No player bar loaded (nothing playing / signed out): Shuffle/Repeat dimmed and disabled, menu items absent, nothing else breaks. Result: ____
 - [ ] Tooltips ("Shuffle: off (click to turn on)", "Repeat: all (click to repeat one)", ...) and VoiceOver labels ("Shuffle", value On/Off; "Repeat", value Off/All/One). Result: ____
 - [ ] Restore your shuffle/repeat settings after testing.
+
+## Up Next queue (bridge 1.4.2; details in docs/QUEUE.md)
+- [ ] Play an album/playlist, open the popover: bottom row shows the very next song (small cover, title, artist) with a chevron; nothing above it changed. Result: ____
+- [ ] Click the row/chevron: expands to "Up Next" header + up to 10 upcoming songs (scrolls after ~5 rows); click the header to collapse. Quit and relaunch: the last state is kept. Result: ____
+- [ ] Skip a track: the list shifts to the new upcoming songs within a few seconds. Result: ____
+- [ ] Nothing playing, a station/radio, a podcast, or the last song of the queue: the section is absent (no empty box). Result: ____
+- [ ] With shuffle on, the list matches Amazon's queue panel order. Result: ____
+
+## Loaded-but-paused track after launch (bridge 1.5.1; details in docs/MEDIA_CONTROLS.md)
+- [ ] Quit the app while a track is paused/playing, relaunch and don't press play. The web player's bar shows the track paused; open the menu bar popover: title, artist, cover and progress are shown, Play is enabled, Up Next appears. Dock menu shows the track, not "Not playing". Result: ____
+- [ ] Press Play in the popover (or Dock menu): playback resumes; the title/cover don't flicker and no "track changed" notification fires. Result: ____
+- [ ] Signed in with nothing loaded: popover says "Nothing playing / Pick something to play in Amazon Music" (no sign-in wording). Result: ____
+- [ ] Signed out (Settings > reset website data): popover says "Open the main window to sign in". Sign in again afterwards. Result: ____
+
+## Up Next after Next / Previous (bridge 1.5.1; details in docs/QUEUE.md)
+- [ ] Open the popover with Up Next expanded, press Next in the popover: within ~1-2 s the list drops the track that just started and shows the following songs (the new current track is never listed as "next"). Result: ____
+- [ ] Same with the Dock/status menu Next, the keyboard media key, and Amazon's own player-bar Next. Result: ____
+- [ ] Press Previous twice quickly (first restarts, second goes back): the list updates to the earlier track's upcoming songs, including when going back past where you started the queue. Result: ____
+- [ ] Click Next 5-6 times quickly: the list settles on the right songs, no flicker back to old ones. Let a song end naturally: the list advances. Result: ____
+
+## Play Similar Music (bridge 1.6.0; details in docs/CONTROLS.md)
+- [ ] Popover with a music track: a round badge with radio waves sits top-left on the cover, matching the heart at bottom-right (same size/backing/margin, dims until hover). Tooltip "Play Similar Music"; VoiceOver reads the same. Result: ____
+- [ ] Click it: a spinner shows briefly, a similar-music station starts (new track, Up Next refills), and Amazon's own menu never flashes in the main window (try with the window visible). Result: ____
+- [ ] Afterwards open Amazon's "..." menu yourself in the main window: it shows normally. Result: ____
+- [ ] Podcast episode, ad, nothing loaded, signed out: the badge is absent. Right-click the menu bar item: "Play Similar Music" is listed only when the badge is shown and works. Result: ____
+
+## Jump to an Up Next song (bridge 1.7.0; details in docs/QUEUE.md)
+- [ ] Collapsed Up Next: click the song (art/title): it plays immediately, the row dims with a spinner until the track changes, Up Next updates. Click the chevron: it expands/collapses (and clicking the song does not). Result: ____
+- [ ] Expanded: hover a row (highlight, play glyph, tooltip "Play <title>"); click the 2nd and 3rd rows: exactly that song plays (the ones before it are skipped), the list drops everything up to it. Result: ____
+- [ ] Rapid double click on one row or a click right after Next: no double skip, no crash. Click a row after its song already played (stale): nothing happens. Result: ____
+- [ ] Works while playing and while paused; VoiceOver reads "Play <title>". Result: ____
+
+## Hardening checks (bridge 1.7.1)
+- [ ] Reload the page (Cmd-R in the main window) and open the popover: Up Next rows are clickable again (the controller is re-captured as the page initialises it) and the main window doesn't stutter. Result: ____
+- [ ] Right after launch with nothing loaded and signed in, the popover says "Pick something to play", not the sign-in prompt, even briefly. Result: ____
+- [ ] Open Amazon's own "..." menu in the main window and, while it is open, click Play Similar in the popover: your menu is left alone. Result: ____
+- [ ] Switch Amazon Music's region/language (Settings) and use Play Similar: it still works (testid-based). Result: ____

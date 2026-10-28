@@ -33,7 +33,7 @@ actor ArtworkCache {
 
     /// Local file URL (valid .jpg/.png extension) for the artwork, downloading if needed. nil on failure.
     func fileURL(for url: URL) async -> URL? {
-        guard url.scheme?.lowercased() == "https" else { return nil }
+        guard ArtworkPolicy.isTrusted(url) else { return nil }
         let fm = FileManager.default
         let target = directory.appendingPathComponent(Self.baseName(for: url))
         for ext in ["jpg", "png"] {

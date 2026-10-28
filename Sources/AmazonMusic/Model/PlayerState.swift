@@ -13,6 +13,42 @@ final class PlayerState {
     private(set) var confirmedLiked: Bool?
     private(set) var pendingLike: PendingLike?
 
+    /// Upcoming tracks (next first) as last reported by the page; empty = unknown/none, so the UI hides the section.
+    private(set) var upNext: [BridgeMessage.QueueItem] = []
+
+    /// Sign-in state last reported by the page (nil = unknown).
+    private(set) var signedIn: Bool?
+
+    /// What the popover shows: a track (playing OR loaded-but-paused), the signed-out prompt, or "nothing loaded" (signed in / unknown).
+    enum PopoverMode: Equatable, Sendable { case track, signedOut, nothingLoaded }
+    var popoverMode: PopoverMode {
+        guard bridgeHealthy else { return .nothingLoaded }
+        if track != nil { return .track }
+        return signedIn == false ? .signedOut : .nothingLoaded
+    }
+
+    /// The page reported that "Play Similar Music" is available for the current item.
+    private(set) var reportedCanPlaySimilar = false
+    /// The page can start a queue entry (Up Next rows clickable).
+    private(set) var reportedCanJump = false
+    /// The Up Next entry we asked the page to jump to (row shows pending); cleared when the track changes or after a short deadline.
+    private(set) var jumpPending: (id: String, deadline: Date)?
+    static let jumpWindow: TimeInterval = 6
+    var canJumpToQueueItem: Bool { popoverMode == .track && reportedCanJump }
+    func beginJump(to id: String, at now: Date = Date()) { jumpPending = (id, now.addingTimeInterval(Self.jumpWindow)) }
+    func endJump() { if jumpPending != nil { jumpPending = nil } }
+    /// True while a jump to this entry is pending (and not expired).
+    func isJumpPending(_ id: String?, at now: Date = Date()) -> Bool { id != nil && jumpPending?.id == id && now < (jumpPending?.deadline ?? .distantPast) }
+
+    /// True while a Play Similar action is running (badge shows a spinner); cleared when the track changes or after a short deadline.
+    private(set) var similarPending: Date?
+    static let similarWindow: TimeInterval = 6
+    /// Whether the popover offers the action: a loaded track and the page says it is supported.
+    var canPlaySimilar: Bool { popoverMode == .track && reportedCanPlaySimilar }
+    func isSimilarInProgress(at now: Date = Date()) -> Bool { similarPending.map { now < $0 } ?? false }
+    func beginSimilar(at now: Date = Date()) { similarPending = now.addingTimeInterval(Self.similarWindow) }
+    func endSimilar() { if similarPending != nil { similarPending = nil } }
+
     struct PendingLike: Equatable, Sendable { var value: Bool; var deadline: Date }
     static let optimisticWindow: TimeInterval = 3
 
@@ -66,6 +102,14 @@ final class PlayerState {
             if confirmedShuffle != sh { confirmedShuffle = sh }
             let rp = Self.reconcile(&pendingRepeat, reported: hasTrack ? s.repeatMode : nil, trackChanged: changedTrack, now: now)
             if confirmedRepeat != rp { confirmedRepeat = rp }
+            let q = hasTrack ? (s.queue ?? []) : []
+            if upNext != q { upNext = q }
+            if signedIn != s.signedIn { signedIn = s.signedIn }
+            let canSimilar = hasTrack && (s.canPlaySimilar ?? false)
+            if reportedCanPlaySimilar != canSimilar { reportedCanPlaySimilar = canSimilar }
+            if changedTrack { endSimilar(); endJump() }
+            let canJump = hasTrack && (s.canJumpToQueueItem ?? false)
+            if reportedCanJump != canJump { reportedCanJump = canJump }
             if isPlaying != s.isPlaying { isPlaying = s.isPlaying }
             position = s.position
             positionTimestamp = s.position == nil ? nil : now

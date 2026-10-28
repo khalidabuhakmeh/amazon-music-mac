@@ -28,4 +28,10 @@ final class StatusMenuModelTests: XCTestCase {
         let none = StatusMenuModel.build(isPlaying: false)
         XCTAssertFalse(none.contains { $0.action == .toggleShuffle || $0.action == .cycleRepeat })
     }
+    func testPlaySimilarItemOnlyWhenAvailable() {
+        XCTAssertFalse(StatusMenuModel.build(isPlaying: false).contains { $0.action == .playSimilar })
+        let m = StatusMenuModel.build(isPlaying: false, isLiked: true, isShuffled: false, repeatMode: .off, canPlaySimilar: true)
+        XCTAssertEqual(m.map(\.title).prefix(7), ["Play", "Next", "Previous", "Unlike", "Turn Shuffle On", "Repeat All", "Play Similar Music"])
+        XCTAssertEqual(m[6].action, .playSimilar)
+    }
 }

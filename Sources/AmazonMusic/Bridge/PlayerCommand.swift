@@ -5,6 +5,12 @@ enum PlayerCommand: Sendable, Equatable {
     case seek(Double)
     case toggleLike
     case toggleShuffle, cycleRepeat
+    /// Asks the bridge to refresh the Up Next queue (throttled in the page).
+    case refreshQueue
+    /// Starts a station of similar music for the current track (the page's own "Play Similar Music" action).
+    case playSimilar
+    /// Jumps playback to an Up Next entry (its `QueueItem.id`).
+    case playQueueItem(String)
 
     /// Async function body (awaits the command, returns a JSON string), or nil if arguments are invalid.
     var asyncBody: String? { script.map { "return JSON.stringify(await \($0));" } }
@@ -20,6 +26,14 @@ enum PlayerCommand: Sendable, Equatable {
         case .toggleLike: "window.__amzBridge.toggleLike()"
         case .toggleShuffle: "window.__amzBridge.toggleShuffle()"
         case .cycleRepeat: "window.__amzBridge.cycleRepeat()"
+        case .refreshQueue: "window.__amzBridge.refreshQueue()"
+        case .playSimilar: "window.__amzBridge.playSimilar()"
+        case .playQueueItem(let id):
+            // Validated to a safe charset AND emitted as a JSON string literal (never string-interpolated into script text).
+            BridgeMessage.validQueueItemID(id)
+                .flatMap { try? JSONEncoder().encode($0) }
+                .flatMap { String(data: $0, encoding: .utf8) }
+                .map { "window.__amzBridge.playQueueItem(\($0))" }
         case .seek(let s):
             s.isFinite ? "window.__amzBridge.seek(\(max(0, s)))" : nil
         }

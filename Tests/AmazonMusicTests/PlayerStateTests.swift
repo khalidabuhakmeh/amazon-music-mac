@@ -20,6 +20,82 @@ final class PlayerStateTests: XCTestCase {
         XCTAssertNil(s.track)
     }
 
+    func testPopoverModeSignedOutVsNothingLoadedVsPausedTrack() {
+        let s = PlayerState()
+        func msg(title: String?, playing: Bool, signedIn: Bool?, pos: Double? = 96) -> BridgeMessage {
+            .state(.init(trackId: nil, title: title, artist: title == nil ? nil : "A", album: title == nil ? nil : "Al", artworkURL: nil,
+                         duration: title == nil ? nil : 137, position: title == nil ? nil : pos, isPlaying: playing, signedIn: signedIn))
+        }
+        XCTAssertEqual(s.popoverMode, .nothingLoaded)                       // before any message
+        s.apply(msg(title: nil, playing: false, signedIn: nil)); XCTAssertEqual(s.popoverMode, .nothingLoaded) // unknown: no sign-in wording
+        s.apply(msg(title: nil, playing: false, signedIn: true)); XCTAssertEqual(s.popoverMode, .nothingLoaded)
+        s.apply(msg(title: nil, playing: false, signedIn: false)); XCTAssertEqual(s.popoverMode, .signedOut)
+        // loaded-but-paused track (right after launch): shown with progress, not playing
+        s.apply(msg(title: "T", playing: false, signedIn: true))
+        XCTAssertEqual(s.popoverMode, .track); XCTAssertEqual(s.track?.title, "T"); XCTAssertFalse(s.isPlaying)
+        XCTAssertEqual(s.track?.duration, 137); XCTAssertEqual(s.position, 96)
+        s.apply(msg(title: "T", playing: true, signedIn: true)); XCTAssertTrue(s.isPlaying); XCTAssertEqual(s.popoverMode, .track)
+        // a track wins even if the sign-in flag is momentarily false; an unhealthy bridge never claims "signed out"
+        s.apply(msg(title: "T", playing: false, signedIn: false)); XCTAssertEqual(s.popoverMode, .track)
+        s.apply(msg(title: nil, playing: false, signedIn: false)); s.markUnhealthy("x")
+        XCTAssertEqual(s.popoverMode, .nothingLoaded)
+    }
+
+    func testPlaySimilarAvailabilityAndPending() {
+        let s = PlayerState(); let t0 = Date(timeIntervalSince1970: 1000)
+        func msg(_ title: String?, similar: Bool?, signedIn: Bool? = true) -> BridgeMessage {
+            .state(.init(trackId: nil, title: title, artist: title == nil ? nil : "A", album: title == nil ? nil : "Al", artworkURL: nil,
+                         duration: 100, position: 1, isPlaying: true, signedIn: signedIn, canPlaySimilar: similar))
+        }
+        XCTAssertFalse(s.canPlaySimilar)
+        s.apply(msg(nil, similar: true), at: t0); XCTAssertFalse(s.canPlaySimilar)       // nothing loaded: never offered
+        s.apply(msg("T", similar: nil), at: t0); XCTAssertFalse(s.canPlaySimilar)        // unknown (older bridge)
+        s.apply(msg("T", similar: false), at: t0); XCTAssertFalse(s.canPlaySimilar)      // podcast / unsupported
+        s.apply(msg("T", similar: true), at: t0); XCTAssertTrue(s.canPlaySimilar)
+        s.markUnhealthy("x"); XCTAssertFalse(s.canPlaySimilar)                           // unhealthy bridge: hidden
+        s.apply(msg("T", similar: true), at: t0); XCTAssertTrue(s.canPlaySimilar)
+        // pending spinner: set, expires, cleared by a track change
+        XCTAssertFalse(s.isSimilarInProgress(at: t0))
+        s.beginSimilar(at: t0); XCTAssertTrue(s.isSimilarInProgress(at: t0 + 1)); XCTAssertFalse(s.isSimilarInProgress(at: t0 + 7))
+        s.apply(msg("T", similar: true), at: t0 + 1); XCTAssertNotNil(s.similarPending)  // same track: still pending
+        s.apply(msg("Other", similar: true), at: t0 + 2); XCTAssertNil(s.similarPending) // new track: spinner ends
+    }
+
+    func testJumpAvailabilityAndPending() {
+        let s = PlayerState(); let t0 = Date(timeIntervalSince1970: 1000)
+        func msg(_ title: String?, jump: Bool?) -> BridgeMessage {
+            .state(.init(trackId: nil, title: title, artist: title == nil ? nil : "A", album: title == nil ? nil : "Al", artworkURL: nil,
+                         duration: 100, position: 1, isPlaying: true, canJumpToQueueItem: jump))
+        }
+        XCTAssertFalse(s.canJumpToQueueItem)
+        s.apply(msg("T", jump: nil), at: t0); XCTAssertFalse(s.canJumpToQueueItem)   // older bridge
+        s.apply(msg("T", jump: false), at: t0); XCTAssertFalse(s.canJumpToQueueItem)
+        s.apply(msg(nil, jump: true), at: t0); XCTAssertFalse(s.canJumpToQueueItem)  // nothing loaded
+        s.apply(msg("T", jump: true), at: t0); XCTAssertTrue(s.canJumpToQueueItem)
+        s.markUnhealthy("x"); XCTAssertFalse(s.canJumpToQueueItem)
+        s.apply(msg("T", jump: true), at: t0)
+        // pending: per entry, expires, cleared by a track change
+        s.beginJump(to: "id1", at: t0)
+        XCTAssertTrue(s.isJumpPending("id1", at: t0 + 1)); XCTAssertFalse(s.isJumpPending("id2", at: t0 + 1))
+        XCTAssertFalse(s.isJumpPending("id1", at: t0 + 7)); XCTAssertFalse(s.isJumpPending(nil, at: t0))
+        s.apply(msg("T", jump: true), at: t0 + 1); XCTAssertNotNil(s.jumpPending)   // same track: still pending
+        s.apply(msg("Next song", jump: true), at: t0 + 2); XCTAssertNil(s.jumpPending)
+    }
+
+    func testUpNextQueueHandling() {
+        let s = PlayerState()
+        func msg(title: String?, queue: [BridgeMessage.QueueItem]?) -> BridgeMessage {
+            .state(.init(trackId: nil, title: title, artist: title == nil ? nil : "A", album: title == nil ? nil : "Al", artworkURL: nil,
+                         duration: 100, position: 1, isPlaying: true, queue: queue))
+        }
+        XCTAssertTrue(s.upNext.isEmpty)
+        let items = [BridgeMessage.QueueItem(title: "N1", artist: "X", artworkURL: nil), .init(title: "N2", artist: nil, artworkURL: nil)]
+        s.apply(msg(title: "T", queue: items)); XCTAssertEqual(s.upNext, items)
+        s.apply(msg(title: "T", queue: nil)); XCTAssertTrue(s.upNext.isEmpty)           // unknown -> hidden
+        s.apply(msg(title: "T", queue: items)); s.apply(msg(title: nil, queue: items))   // nothing playing -> hidden
+        XCTAssertTrue(s.upNext.isEmpty)
+    }
+
     func stl(_ liked: Bool?, title: String = "T") -> BridgeMessage {
         .state(.init(trackId: nil, title: title, artist: "A", album: "Al", artworkURL: nil,
                      duration: 100, position: 1, isPlaying: true, liked: liked))

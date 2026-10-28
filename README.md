@@ -13,7 +13,8 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 - Native Apple silicon (arm64) app, macOS 26+
 - Hosts music.amazon.com in a `WKWebView`; playback uses WebKit's FairPlay, so audio is delivered by Amazon's own player
 - Media keys, Control Center and AirPods controls via Now Playing
-- Menu bar mini player: cover, title, progress, controls, shuffle, repeat, like
+- Menu bar mini player: cover, title, progress, controls, shuffle, repeat, like, Play Similar Music
+- Up Next queue in the mini player: collapsed shows the next song, expanded lists up to 10; click a song to jump to it
 - Dock menu, and a right-click menu on the menu bar item
 - Track-change notifications
 - Keeps playing when the window is closed
@@ -25,7 +26,7 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 
 | Menu bar mini player | Dock menu |
 | --- | --- |
-| <img src="docs/screenshots/menu-bar-player.png" alt="Menu bar mini player with cover, progress and playback controls" width="340"> | <img src="docs/screenshots/dock-menu.png" alt="Dock menu with now playing, Pause, Next and Previous" width="190"> |
+| <img src="docs/screenshots/menu-bar-player.png" alt="Menu bar mini player with cover, Play Similar and like badges, progress, playback controls and the Up Next queue" width="340"> | <img src="docs/screenshots/dock-menu.png" alt="Dock menu with now playing, Pause, Next and Previous" width="190"> |
 
 <img src="docs/screenshots/settings.png" alt="Settings window with hide podcasts, Audible, Get App and Home banner toggles" width="480">
 
@@ -115,7 +116,7 @@ node tools/hidesections-test/hidesections.test.mjs
 
 Manual checklist: [docs/QA.md](docs/QA.md).
 
-Further notes: [media controls](docs/MEDIA_CONTROLS.md), [shuffle/repeat](docs/CONTROLS.md), [like](docs/LIKE.md), [podcasts/Audible](docs/PODCASTS.md), [initial spike](docs/SPIKE.md).
+Further notes: [media controls](docs/MEDIA_CONTROLS.md), [shuffle/repeat](docs/CONTROLS.md), [like](docs/LIKE.md), [podcasts/Audible](docs/PODCASTS.md), [Up Next queue](docs/QUEUE.md), [initial spike](docs/SPIKE.md).
 
 ## Known limitations and risks
 

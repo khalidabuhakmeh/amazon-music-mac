@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isLiked: { [weak self] in self?.player?.isLiked },
         isShuffled: { [weak self] in self?.player?.isShuffled },
         repeatMode: { [weak self] in self?.player?.repeatMode },
+        canPlaySimilar: { [weak self] in self?.player?.canPlaySimilar ?? false },
         perform: { [weak self] action in
             switch action {
             case .playPause: if let b = self?.bridge { Task { await b.send(.toggle) } }
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .toggleLike: if let b = self?.bridge { Task { await b.toggleLike() } }
             case .toggleShuffle: if let b = self?.bridge { Task { await b.toggleShuffle() } }
             case .cycleRepeat: if let b = self?.bridge { Task { await b.cycleRepeat() } }
+            case .playSimilar: if let b = self?.bridge { Task { await b.playSimilar() } }
             case .openApp: MainWindowCoordinator.shared.open()
             case .settings: NSApp.activate(); NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             case .quit: NSApp.terminate(nil)
