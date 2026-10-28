@@ -154,7 +154,8 @@ Play an album/playlist with several tracks first (skip limits on free tiers may 
 - [ ] Podcast episode, ad, nothing loaded, signed out: the badge is absent. Right-click the menu bar item: "Play Similar Music" is listed only when the badge is shown and works. Result: ____
 
 ## Jump to an Up Next song (bridge 1.7.0; details in docs/QUEUE.md)
-- [ ] Collapsed Up Next: click the song (art/title): it plays immediately, the row dims with a spinner until the track changes, Up Next updates. Click the chevron: it expands/collapses (and clicking the song does not). Result: ____
+- [ ] Collapsed Up Next: no hover box or play icon; clicking anywhere on the row (song or chevron) expands the list and does not change the playing track. Artwork lines up with the title column above. Result: ____
+- [ ] Expanded Up Next: hovering a row shows a subtle inset highlight and a play icon over its artwork; clicking it plays that song immediately (spinner on the artwork until the track changes), Up Next updates. Result: ____
 - [ ] Expanded: hover a row (highlight, play glyph, tooltip "Play <title>"); click the 2nd and 3rd rows: exactly that song plays (the ones before it are skipped), the list drops everything up to it. Result: ____
 - [ ] Rapid double click on one row or a click right after Next: no double skip, no crash. Click a row after its song already played (stale): nothing happens. Result: ____
 - [ ] Works while playing and while paused; VoiceOver reads "Play <title>". Result: ____

@@ -14,7 +14,7 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 - Hosts music.amazon.com in a `WKWebView`; playback uses WebKit's FairPlay, so audio is delivered by Amazon's own player
 - Media keys, Control Center and AirPods controls via Now Playing
 - Menu bar mini player: cover, title, progress, controls, shuffle, repeat, like, Play Similar Music
-- Up Next queue in the mini player: collapsed shows the next song, expanded lists up to 10; click a song to jump to it
+- Up Next queue in the mini player: collapsed shows the next song, expanded lists up to 10; click a song in the list to jump to it
 - Dock menu, and a right-click menu on the menu bar item
 - Track-change notifications
 - Keeps playing when the window is closed

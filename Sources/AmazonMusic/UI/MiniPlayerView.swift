@@ -134,20 +134,20 @@ private struct UpNextSection: View {
                 .frame(height: min(CGFloat(min(items.count, 10)) * Self.rowHeight, Self.rowHeight * Self.maxVisibleRows))
                 .padding(.bottom, 6)
             } else if let first = items.first {
-                // Split: the song plays, the chevron toggles (whole row toggles when jumping isn't available).
-                HStack(spacing: 0) {
-                    UpNextRow(item: first, showsLabel: true, playable: playable(first), pending: player.isJumpPending(first.id),
-                              onPlay: playable(first) ? { play(first) } : { toggle() })
-                        .padding(.leading, 14)
-                    Button { toggle() } label: {
-                        chevron.frame(width: 40, height: 44).contentShape(Rectangle())
+                // Collapsed: a preview of the next song; the whole row (song + chevron) only expands the list.
+                Button { toggle() } label: {
+                    HStack(spacing: 0) {
+                        UpNextRow(item: first, showsLabel: true)
+                        chevron.frame(width: 42, height: 44)
                     }
-                    .buttonStyle(.plain)
-                    .help("Show upcoming songs")
-                    .accessibilityLabel("Show upcoming songs")
-                    .accessibilityValue("Collapsed")
+                    .frame(height: 44)
+                    .contentShape(Rectangle())
                 }
-                .frame(height: 44)
+                .buttonStyle(.plain)
+                .help("Show upcoming songs")
+                .accessibilityLabel("Up next: \(first.title)\(first.artist.map { " by \($0)" } ?? "")")
+                .accessibilityValue("Collapsed")
+                .accessibilityHint("Shows the upcoming songs")
             }
         }
     }
@@ -176,8 +176,9 @@ private struct UpNextSection: View {
     private func toggle() { withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() } }
 }
 
-/// One upcoming song. When `playable`, the whole row is a button that plays it (hover highlight, "Play <title>" tooltip,
-/// dimmed with a spinner while `pending`). When not playable the row is passed `onPlay` only for the collapsed toggle fallback.
+/// One upcoming song. When `playable` (expanded list), the whole row is a button that plays it (hover highlight + play icon
+/// on the artwork, "Play <title>" tooltip, spinner on the artwork while `pending`). `showsLabel` marks the collapsed preview
+/// row, which is never playable: its parent button only expands the list.
 private struct UpNextRow: View {
     let item: BridgeMessage.QueueItem
     var showsLabel = false
@@ -189,9 +190,19 @@ private struct UpNextRow: View {
 
     var body: some View {
         let content = HStack(spacing: 10) {
-            Group {
-                if let image { Image(nsImage: image).resizable().scaledToFill() }
-                else { ZStack { Rectangle().fill(.quaternary); Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.secondary) } }
+            ZStack {
+                Group {
+                    if let image { Image(nsImage: image).resizable().scaledToFill() }
+                    else { ZStack { Rectangle().fill(.quaternary); Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.secondary) } }
+                }
+                // Hover/pending feedback lives on the artwork (like Music.app), not as a trailing glyph next to the chevron.
+                if pending {
+                    Rectangle().fill(.black.opacity(0.5))
+                    ProgressView().controlSize(.mini).tint(.white)
+                } else if playable && hovering {
+                    Rectangle().fill(.black.opacity(0.45))
+                    Image(systemName: "play.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                }
             }
             .frame(width: 28, height: 28)
             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -203,13 +214,20 @@ private struct UpNextRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if pending { ProgressView().controlSize(.small) }
-            else if playable && hovering { Image(systemName: "play.fill").font(.system(size: 10)).foregroundStyle(.primary.opacity(0.7)) }
         }
-        .padding(.horizontal, showsLabel ? 4 : 14)
+        // Collapsed: artwork aligns with the title column above (14pt), chevron button supplies the trailing edge.
+        .padding(.leading, 14)
+        .padding(.trailing, showsLabel ? 0 : 14)
         .frame(maxHeight: .infinity)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(playable && hovering && !pending ? 0.08 : 0)))
-        .opacity(pending ? 0.55 : 1)
+        .background {
+            // Expanded list rows get a subtle inset highlight; the collapsed row relies on the artwork overlay only.
+            if !showsLabel {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(playable && hovering && !pending ? 0.07 : 0))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+            }
+        }
+        .opacity(pending ? 0.7 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .task(id: item.artworkURL) {
@@ -217,14 +235,14 @@ private struct UpNextRow: View {
             guard let url = item.artworkURL else { image = nil; return }
             if let loaded = await ArtworkCache.shared.image(for: url) { image = loaded }
         }
-        if playable || showsLabel {
+        if playable {
             Button(action: onPlay) { content }
                 .buttonStyle(.plain)
                 .disabled(pending)
-                .help(playable ? "Play \(item.title)" : "Show upcoming songs")
-                .accessibilityLabel(playable ? "Play \(item.title)" : "Up next: \(item.title)")
+                .help("Play \(item.title)")
+                .accessibilityLabel("Play \(item.title)")
                 .accessibilityValue(pending ? "Starting" : "")
-                .accessibilityHint(playable ? "Skips to this song" : "Shows the upcoming songs")
+                .accessibilityHint("Skips to this song")
         } else {
             content
         }

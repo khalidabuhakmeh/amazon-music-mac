@@ -62,7 +62,7 @@ Not verified live: the SwiftUI section's appearance in the real popover (only pr
 - The `persistedQuery` hash and `cloud-queue-store` layout are undocumented and can change.
 
 ## Jump to an Up Next song (bridge 1.7.0, hardened in 1.7.1)
-Clicking an Up Next row starts that song immediately. In the popover the song area plays it (hover highlight, "Play <title>" tooltip/VoiceOver label, dimmed with a spinner until the track changes or 6 s pass); the chevron toggles expansion (the expanded header still toggles). If jumping isn't available the collapsed row falls back to toggling.
+Clicking a row in the **expanded** Up Next list starts that song immediately (hover: subtle row highlight and a play icon over the artwork; "Play <title>" tooltip/VoiceOver label; a spinner on the artwork until the track changes or 6 s pass). The header toggles expansion. The **collapsed** row is only a preview: clicking anywhere on it (song or chevron) expands the list; it never starts playback.
 
 **Mechanism (verified live):** the page's queue panel is unusable here (the "View Queue" button is `disabled`), and Next/Previous/jumping are local player operations (no GraphQL "skip" call; the network only sees `ReportDevicePlayback`/`Transport`/`FetchRemoteQueue` afterwards). The page's queue-row click handler calls
 

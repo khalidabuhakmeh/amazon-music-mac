@@ -1,81 +1,102 @@
-// Renders the AppIcon set. Run: swift tools/icon/make_icon.swift
+// Renders the AppIcon set ("Equalizer": glowing cyan→violet bars on a dark indigo squircle).
+// Run from the repo root: swift tools/icon/make_icon.swift
+// Draws a 1024px master, then downsamples it for every slot (keeps glow/shadow consistent at all sizes).
 import AppKit
+
 let outDir = "Sources/AmazonMusic/Resources/Assets.xcassets/AppIcon.appiconset"
 let cs = CGColorSpace(name: CGColorSpace.sRGB)!
-func rgb(_ r: CGFloat,_ g: CGFloat,_ b: CGFloat,_ a: CGFloat = 1) -> CGColor { CGColor(colorSpace: cs, components: [r,g,b,a])! }
 
+func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor { CGColor(colorSpace: cs, components: [r, g, b, a])! }
+func hex(_ h: Int, _ a: CGFloat = 1) -> CGColor {
+  rgb(CGFloat((h >> 16) & 255) / 255, CGFloat((h >> 8) & 255) / 255, CGFloat(h & 255) / 255, a)
+}
+func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
+func grad(_ c: [CGColor], _ l: [CGFloat]? = nil) -> CGGradient { CGGradient(colorsSpace: cs, colors: c as CFArray, locations: l)! }
+func lin(_ g: CGContext, _ gr: CGGradient, _ a: CGPoint, _ b: CGPoint) {
+  g.drawLinearGradient(gr, start: a, end: b, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+}
+func rad(_ g: CGContext, _ gr: CGGradient, _ c: CGPoint, _ r: CGFloat) {
+  g.drawRadialGradient(gr, startCenter: c, startRadius: 0, endCenter: c, endRadius: r, options: [.drawsAfterEndLocation])
+}
+func fillPath(_ g: CGContext, _ p: CGPath, _ c: CGColor) { g.addPath(p); g.setFillColor(c); g.fillPath() }
+func clipFill(_ g: CGContext, _ p: CGPath, _ draw: () -> Void) { g.saveGState(); g.addPath(p); g.clip(); draw(); g.restoreGState() }
+func glow(_ g: CGContext, _ c: CGColor, _ blur: CGFloat, _ dy: CGFloat = 0) { g.setShadow(offset: CGSize(width: 0, height: dy), blur: blur, color: c) }
+func rrect(_ r: CGRect, _ radius: CGFloat) -> CGPath { CGPath(roundedRect: r, cornerWidth: radius, cornerHeight: radius, transform: nil) }
+func circle(_ c: CGPoint, _ r: CGFloat) -> CGPath { CGPath(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r), transform: nil) }
+
+/// Continuous-corner tile (superellipse, n = 5), macOS icon grid: 824px tile centred in 1024.
 func squircle(_ r: CGRect) -> CGPath {
   let p = CGMutablePath(); let n: CGFloat = 5; let steps = 360
   for i in 0...steps {
-    let t = CGFloat(i)/CGFloat(steps)*2 * .pi
+    let t = CGFloat(i) / CGFloat(steps) * 2 * .pi
     let c = cos(t), s = sin(t)
-    let x = r.midX + r.width/2 * (c < 0 ? -1 : 1) * pow(abs(c), 2/n)
-    let y = r.midY + r.height/2 * (s < 0 ? -1 : 1) * pow(abs(s), 2/n)
-    i == 0 ? p.move(to: CGPoint(x: x, y: y)) : p.addLine(to: CGPoint(x: x, y: y))
+    let x = r.midX + r.width / 2 * (c < 0 ? -1 : 1) * pow(abs(c), 2 / n)
+    let y = r.midY + r.height / 2 * (s < 0 ? -1 : 1) * pow(abs(s), 2 / n)
+    i == 0 ? p.move(to: P(x, y)) : p.addLine(to: P(x, y))
   }
   p.closeSubpath(); return p
 }
 
-func notePath() -> CGPath {
-  // beamed double eighth note, 1024 space (y up)
-  let p = CGMutablePath()
-  let sw: CGFloat = 56
-  let h1 = CGPoint(x: 330, y: 300), h2 = CGPoint(x: 640, y: 250)
-  let s1 = h1.x + 72, s2 = h2.x + 72     // stem centres
-  let t1: CGFloat = 740, t2: CGFloat = 690 // stem tops (slanted beam)
-  p.addRect(CGRect(x: s1-sw/2, y: h1.y, width: sw, height: t1-h1.y))
-  p.addRect(CGRect(x: s2-sw/2, y: h2.y, width: sw, height: t2-h2.y))
-  p.move(to: CGPoint(x: s1-sw/2, y: t1-110))
-  p.addLine(to: CGPoint(x: s2+sw/2, y: t2-110))
-  p.addLine(to: CGPoint(x: s2+sw/2, y: t2+10))
-  p.addLine(to: CGPoint(x: s1-sw/2, y: t1+10))
-  p.closeSubpath()
-  for c in [h1, h2] {
-    var t = CGAffineTransform(translationX: c.x, y: c.y).rotated(by: 0.35)
-    p.addPath(CGPath(ellipseIn: CGRect(x: -100, y: -72, width: 200, height: 144), transform: &t))
+/// Tile contents: dark indigo background with a violet bloom, seven rounded equalizer bars with a cyan glow,
+/// a cyan→violet→magenta fill and a left-edge gloss per bar, plus a row of faint "reflection" dots.
+func equalizer(_ g: CGContext) {
+  lin(g, grad([hex(0x161B4A), hex(0x070A1E)]), P(512, 924), P(512, 100))
+  rad(g, grad([hex(0x7B3FF2, 0.35), hex(0x7B3FF2, 0)]), P(512, 470), 460)
+  let heights: [CGFloat] = [190, 330, 500, 390, 560, 300, 170]
+  let w: CGFloat = 70, gap: CGFloat = 28
+  let x0 = 512 - (7 * w + 6 * gap) / 2
+  let bars = CGMutablePath()
+  for (i, h) in heights.enumerated() {
+    bars.addPath(rrect(CGRect(x: x0 + CGFloat(i) * (w + gap), y: 512 - h / 2, width: w, height: h), w / 2))
   }
-  // Fit: scale so glyph width = 55% of tile (824), centre bbox on tile centre (512,512).
-  let bb = p.boundingBoxOfPath
-  let k = (824 * 0.55) / bb.width
-  var m = CGAffineTransform(translationX: 512, y: 512).scaledBy(x: k, y: k).translatedBy(x: -bb.midX, y: -bb.midY)
-  return p.copy(using: &m)!
+  g.saveGState(); glow(g, hex(0x25D1DA, 0.55), 50); fillPath(g, bars, hex(0x25D1DA)); g.restoreGState()
+  clipFill(g, bars) {
+    lin(g, grad([hex(0x2BE6E6), hex(0x25D1DA), hex(0x7A4CF5), hex(0xC040E0)], [0, 0.35, 0.75, 1]), P(512, 790), P(512, 240))
+    for i in 0..<7 {
+      let bx = x0 + CGFloat(i) * (w + gap)
+      lin(g, grad([rgb(1, 1, 1, 0.28), rgb(1, 1, 1, 0)]), P(bx, 512), P(bx + w * 0.55, 512))
+    }
+  }
+  for i in 0..<7 { fillPath(g, circle(P(x0 + CGFloat(i) * (w + gap) + w / 2, 200), 7), hex(0x25D1DA, 0.5)) }
 }
 
-func render(_ px: Int) -> Data {
-  let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-  let ctx = NSGraphicsContext(bitmapImageRep: rep)!
-  NSGraphicsContext.current = ctx
-  let g = ctx.cgContext
-  g.scaleBy(x: CGFloat(px)/1024, y: CGFloat(px)/1024)
-  g.interpolationQuality = .high
+func master() -> CGImage {
+  let g = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 0, space: cs,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+  g.interpolationQuality = .high; g.setShouldAntialias(true)
   let shape = squircle(CGRect(x: 100, y: 100, width: 824, height: 824))
-  // drop shadow
-  g.saveGState()
-  g.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: rgb(0,0,0,0.45))
-  g.addPath(shape); g.setFillColor(rgb(0.04,0.08,0.2)); g.fillPath()
-  g.restoreGState()
-  // gradient
+  // drop shadow under the tile
+  g.saveGState(); glow(g, rgb(0, 0, 0, 0.5), 28, -12); fillPath(g, shape, rgb(0.05, 0.05, 0.1)); g.restoreGState()
   g.saveGState(); g.addPath(shape); g.clip()
-  let grad = CGGradient(colorsSpace: cs, colors: [rgb(0.03,0.07,0.22), rgb(0.05,0.30,0.55), rgb(0.1,0.85,0.9)] as CFArray, locations: [0,0.55,1])!
-  g.drawLinearGradient(grad, start: CGPoint(x: 140, y: 924), end: CGPoint(x: 884, y: 100), options: [])
-  // top highlight
-  let hl = CGGradient(colorsSpace: cs, colors: [rgb(1,1,1,0.12), rgb(1,1,1,0)] as CFArray, locations: [0,1])!
-  g.drawLinearGradient(hl, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 600), options: [])
-  // note with soft shadow
-  g.setShadow(offset: CGSize(width: 0, height: -6), blur: 16, color: rgb(0,0.05,0.2,0.5))
-  g.addPath(notePath()); g.setFillColor(rgb(1,1,1)); g.fillPath()
+  equalizer(g)
+  lin(g, grad([rgb(1, 1, 1, 0.16), rgb(1, 1, 1, 0)]), P(512, 924), P(512, 640)) // top highlight
+  lin(g, grad([rgb(0, 0, 0, 0), rgb(0, 0, 0, 0.22)]), P(512, 300), P(512, 100)) // bottom depth
   g.restoreGState()
-  // rim
-  g.addPath(shape); g.setStrokeColor(rgb(1,1,1,0.18)); g.setLineWidth(3); g.strokePath()
-  NSGraphicsContext.current = nil
-  return rep.representation(using: .png, properties: [:])!
+  // rim: light at the top, dark at the bottom
+  g.saveGState(); g.addPath(shape.copy(strokingWithWidth: 4, lineCap: .butt, lineJoin: .round, miterLimit: 10)); g.clip()
+  lin(g, grad([rgb(1, 1, 1, 0.45), rgb(1, 1, 1, 0.05), rgb(0, 0, 0, 0.25)], [0, 0.5, 1]), P(512, 924), P(512, 100))
+  g.restoreGState()
+  return g.makeImage()!
 }
 
+func scaled(_ img: CGImage, _ px: Int) -> CGImage {
+  if px == img.width { return img }
+  let g = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0, space: cs,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+  g.interpolationQuality = .high
+  g.draw(img, in: CGRect(x: 0, y: 0, width: px, height: px))
+  return g.makeImage()!
+}
+func png(_ img: CGImage) -> Data { NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])! }
+
+let big = master()
 var images: [String] = []
-for base in [16,32,128,256,512] { for s in [1,2] {
+for base in [16, 32, 128, 256, 512] { for s in [1, 2] {
   let name = "icon_\(base)x\(base)\(s == 2 ? "@2x" : "").png"
-  try! render(base*s).write(to: URL(fileURLWithPath: "\(outDir)/\(name)"))
+  try! png(scaled(big, base * s)).write(to: URL(fileURLWithPath: "\(outDir)/\(name)"))
   images.append("{\"filename\":\"\(name)\",\"idiom\":\"mac\",\"scale\":\"\(s)x\",\"size\":\"\(base)x\(base)\"}")
 }}
-try! "{\"images\":[\(images.joined(separator: ","))],\"info\":{\"version\":1,\"author\":\"xcode\"}}\n".write(toFile: "\(outDir)/Contents.json", atomically: true, encoding: .utf8)
-try! render(1024).write(to: URL(fileURLWithPath: "tools/icon/master_1024.png"))
+try! "{\"images\":[\(images.joined(separator: ","))],\"info\":{\"version\":1,\"author\":\"xcode\"}}\n"
+  .write(toFile: "\(outDir)/Contents.json", atomically: true, encoding: .utf8)
+try! png(big).write(to: URL(fileURLWithPath: "tools/icon/master_1024.png"))
+try! png(scaled(big, 256)).write(to: URL(fileURLWithPath: "docs/icon.png"))
