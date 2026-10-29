@@ -40,9 +40,11 @@ Amazon's official desktop app is going away, and the web player lacks macOS inte
 
 Prebuilt builds for Apple silicon are on the [Releases](https://github.com/khalidabuhakmeh/amazon-music-mac/releases) page. Requires macOS 26.
 
-1. Download `AmazonMusic-<version>.dmg`, open it and drag **AmazonMusic** to **Applications**. Or download the `.zip`, unzip it and move the app to Applications.
-2. Open the app. macOS shows *"Apple could not verify 'AmazonMusic' is free of malware…"*. Click **Done**, not Move to Trash.
-3. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to the AmazonMusic message. Confirm with your password or Touch ID, then click **Open Anyway** again.
+1. Download `AmazonMusic-<version>.dmg`, open it and drag **Amazon Music** to **Applications**. Or download the `.zip`, unzip it and move the app to Applications.
+2. Open the app. macOS shows *"Apple could not verify 'Amazon Music' is free of malware…"*. Click **Done**, not Move to Trash.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway** next to the message about the app. Confirm with your password or Touch ID, then click **Open Anyway** again.
+
+The app appears as **Amazon Music** in Finder, the Dock, the menu bar and Spotlight. On disk it is `AmazonMusic.app`, so use that name in Terminal commands.
 
 You only need to do this once per downloaded version. Right-click → Open no longer bypasses this check on current macOS versions.
 
@@ -61,6 +63,8 @@ xattr -dr com.apple.quarantine /Applications/AmazonMusic.app
 CONFIG=Release ./scripts/build.sh     # Release
 cp -R build/Build/Products/Release/AmazonMusic.app /Applications/
 ```
+
+`build.sh` marks `build/` so Spotlight doesn't index it; otherwise every Debug and Release build shows up as another app in Spotlight. Builds made from Xcode go to DerivedData and are still indexed.
 
 The app is ad-hoc signed and runs locally. A copy built on your own Mac isn't quarantined, so Gatekeeper doesn't block it. Developer ID signing and notarization are not set up.
 
@@ -85,6 +89,7 @@ Launch the app and sign in to Amazon once. The session persists across launches.
 - `bridge.js` is injected into the page. It reads `navigator.mediaSession` and the media element, reports state, and sends commands (play, pause, next, previous, seek, shuffle, repeat, like).
 - Messages are decoded into `PlayerState`, which feeds the integrations: Now Playing, menu bar mini player, Dock menu, notifications.
 - `hideSections.js` hides page sections according to settings.
+- The visible name comes from `Resources/en.lproj/InfoPlist.strings`. `PRODUCT_NAME` and the non-localized `CFBundleDisplayName` stay `AmazonMusic`, matching the bundle file name. Finder only uses the localized name when that matches, and space-free paths keep the scripts simple.
 - All DOM selectors live in `bridge.js` and `hideSections.js` and are versioned, so page changes are fixed in one place.
 
 ## Project layout
@@ -95,7 +100,7 @@ Sources/AmazonMusic/
   Bridge/         message decoding, commands, WKScriptMessage handler
   Integrations/   Now Playing, Dock menu, status item, notifications, artwork cache
   Model/          PlayerState, TrackInfo
-  Resources/      bridge.js, hideSections.js, assets, entitlements
+  Resources/      bridge.js, hideSections.js, assets, entitlements, en.lproj (display name)
   Settings/       AppSettings
   UI/             main window, mini player, settings view
   Web/            web view, popups, navigation policy

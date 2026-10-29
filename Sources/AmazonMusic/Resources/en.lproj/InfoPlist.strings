@@ -1,0 +1,3 @@
+/* Name shown in the Dock, menu bar and Finder. PRODUCT_NAME stays "AmazonMusic" (space-free paths/scripts). */
+"CFBundleName" = "Amazon Music";
+"CFBundleDisplayName" = "Amazon Music";
