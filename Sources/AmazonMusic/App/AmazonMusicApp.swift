@@ -42,6 +42,7 @@ struct AmazonMusicApp: App {
                 .environment(bridge)
         }
         .defaultSize(width: 1100, height: 760)
+        .commands { AboutCommands(player: player) }
         #if DEBUG
         .commands { DebugCommands(bridge: bridge) }
         #endif

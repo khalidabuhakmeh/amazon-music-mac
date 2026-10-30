@@ -28,6 +28,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.khalidabuhakmeh.amazonmusic
         PRODUCT_NAME: AmazonMusic
         GENERATE_INFOPLIST_FILE: YES
+        # Overridden by scripts/build.sh (latest git tag / commit count) and the release workflow (tag / run number).
+        # 0.0.0 shows as "development build" in the About panel.
+        MARKETING_VERSION: "0.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Khalid Abuhakmeh. MIT License."
         # Must equal the .app file name so Finder/Dock use the localized
         # "Amazon Music" from Resources/en.lproj/InfoPlist.strings.
         INFOPLIST_KEY_CFBundleDisplayName: AmazonMusic
