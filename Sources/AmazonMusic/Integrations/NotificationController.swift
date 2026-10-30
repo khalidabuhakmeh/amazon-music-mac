@@ -108,11 +108,16 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
         content.title = track.title ?? "Now Playing"
         content.body = [track.artist, track.album].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
         content.threadIdentifier = Self.threadID
+        var attachmentFile: URL?
         if let url = track.artworkURL, let cached = await ArtworkCache.shared.fileURL(for: url),
-           let attachment = Self.attachment(copying: cached) {
+           let (attachment, tmp) = Self.attachment(copying: cached) {
             content.attachments = [attachment]
+            attachmentFile = tmp
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            if let attachmentFile { try? FileManager.default.removeItem(at: attachmentFile) }
+            return
+        }
         let delivered = await center.deliveredNotifications()
         center.removeDeliveredNotifications(withIdentifiers: delivered.filter { $0.request.content.threadIdentifier == Self.threadID }
             .map(\.request.identifier))
@@ -120,16 +125,17 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
             try await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         } catch {
             Self.log.error("post failed: \(error.localizedDescription, privacy: .public)")
+            if let attachmentFile { try? FileManager.default.removeItem(at: attachmentFile) }
         }
     }
 
     /// UNNotificationAttachment moves the file, so give it a unique temp copy with an image extension.
-    private static func attachment(copying file: URL) -> UNNotificationAttachment? {
+    private static func attachment(copying file: URL) -> (UNNotificationAttachment, URL)? {
         let ext = file.pathExtension.isEmpty ? "jpg" : file.pathExtension
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "." + ext)
         do {
             try FileManager.default.copyItem(at: file, to: tmp)
-            return try UNNotificationAttachment(identifier: "artwork", url: tmp)
+            return (try UNNotificationAttachment(identifier: "artwork", url: tmp), tmp)
         } catch {
             log.debug("attachment failed: \(error.localizedDescription, privacy: .public)")
             try? FileManager.default.removeItem(at: tmp)

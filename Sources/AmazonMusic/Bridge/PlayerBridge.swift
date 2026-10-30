@@ -171,10 +171,12 @@ extension PlayerBridge {
     static func evaluate(_ web: WebController, body: String, timeout: Double) async -> EvalOutcome {
         await withCheckedContinuation { (cont: CheckedContinuation<EvalOutcome, Never>) in
             let gate = EvalGate(cont)
+            // The timeout task is cancelled as soon as the evaluation finishes, so it doesn't sleep out the full timeout.
+            let timeoutTask = Task { try? await Task.sleep(for: .seconds(timeout)); if !Task.isCancelled { gate.resume(.timedOut) } }
             Task { @MainActor in
                 do { gate.resume(.value(try await web.evaluateAsync(body) as? String)) } catch { gate.resume(.failed) }
+                timeoutTask.cancel()
             }
-            Task { try? await Task.sleep(for: .seconds(timeout)); gate.resume(.timedOut) }
         }
     }
 }

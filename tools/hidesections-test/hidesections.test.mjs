@@ -61,7 +61,9 @@ function makePage(build, { pathname = "/home", throwing = false } = {}) {
     createElement: (t) => new El(t),
     getElementById: (id) => { let f = null; const w = (e) => { if (e.attrs.id === id) f = f || e; e.children.forEach(w); }; w(html); return f; },
     querySelectorAll: (s) => (throwing ? (() => { throw new Error("boom"); })() : html.querySelectorAll(s)),
-    addEventListener() {},
+    listeners: [],
+    addEventListener(type, fn, cap) { doc.listeners.push({ type, fn, cap }); },
+    removeEventListener(type, fn) { doc.listeners = doc.listeners.filter((l) => !(l.type === type && l.fn === fn)); },
   };
   const history = { pushState() {}, replaceState() {} };
   const w = { document: doc, location: { pathname }, history, setTimeout, clearTimeout };
@@ -366,5 +368,67 @@ await t("homeBanner: no match on non-home route, off by default, independent, hi
   assert.equal(r.html.querySelectorAll("[data-amz-hide-homeBanner]").length, 0);
   r.w.location.pathname = "/home"; r.w.history.pushState({}, "", "/home"); await sleep(250);
   assert.equal(r.html.querySelectorAll("[data-amz-hide-homeBanner]").length, 1);
+});
+
+// ---- v4.2.0 performance: shared heading index / memo / skip-irrelevant-mutations ----
+function bigDom() {
+  const h = (t) => new El("h1", { role: "heading", "aria-label": t }, [new El("h4", { role: "heading" }, [], t)]);
+  const shelf = (i) => new El("div", { "data-testid": "Shelf" }, [h(i % 5 === 0 ? "Podcasts for you" : "Shelf " + i),
+    new El("div", {}, [0, 1, 2, 3].map((k) => new El("div", { "data-testid": "CarouselItem" }, [new El("a", { href: i % 7 === 0 ? "/podcasts/AAAAAAAAAA/BBBBBBBBBB" : "/albums/" + i + "x" + k, role: "link" })])))]);
+  const nav = new El("header", {}, [new El("nav", {}, [new El("button", { "aria-label": "Audiobook" }), new El("button", { "aria-label": "Get App" })])]);
+  return new El("div", { id: "root" }, [nav, new El("div", { "data-testid": "page" }, Array.from({ length: 40 }, (_, i) => shelf(i)))]);
+}
+function countCalls(source) {
+  const p = makePage(bigDom); let n = 0; const orig = El.prototype.querySelectorAll;
+  El.prototype.querySelectorAll = function (s) { n++; return orig.call(this, s); };
+  try { vm.runInContext(`window.__amzHideSectionsInitial={podcasts:true,audible:true,getApp:true,homeBanner:false};` + source, p.w); }
+  finally { El.prototype.querySelectorAll = orig; }
+  return { n, p };
+}
+await t("v4.2.0: large-DOM scan hides expected items with bounded querySelectorAll calls (4.1.0 used ~26000)", () => {
+  const { n, p } = countCalls(src);
+  const shelves = p.html.querySelectorAll('[data-testid="Shelf"]');
+  assert.ok(shelves[0].hasAttribute(A) && shelves[5].hasAttribute(A) && !shelves[1].hasAttribute(A), "heading shelves 0,5,.. hidden");
+  assert.ok(shelves[7].querySelectorAll('[data-testid="CarouselItem"]')[0].hasAttribute(A), "podcast-link card hidden");
+  assert.ok(p.html.querySelectorAll("button").every((b) => b.hasAttribute("data-amz-hide-audible") || b.hasAttribute("data-amz-hide-getApp")));
+  assert.ok(n < 3000, "too many querySelectorAll calls: " + n);
+  assert.equal(p.w.__amzHideSections.version, "4.2.0");
+});
+await t("v4.2.0: mutations only inside hidden subtrees / own style / player are ignored; others still scan", async () => {
+  const p = makePage(homeDom); run(p.w, true);
+  const hiddenShelf = p.html.querySelectorAll('[data-testid="Shelf"]')[1];
+  const inHidden = new El("a", { href: "/podcasts/NEW/NEW" }); hiddenShelf.appendChild(inHidden);
+  p.w.observers[0].cb([{ target: hiddenShelf }]); await sleep(250);
+  assert.ok(!inHidden.hasAttribute(A), "irrelevant mutation did not trigger a scan");
+  p.w.observers[0].cb([{ target: p.html.querySelector('[data-testid="page"]') }]); await sleep(250);
+  assert.ok(inHidden.hasAttribute(A) || hiddenShelf.hasAttribute(A), "relevant mutation scans");
+  const late = new El("a", { href: "/podcasts/ZZZZZZZZZZ/YYYYYYYYYY" }); p.html.querySelector('[data-testid="page"]').appendChild(late);
+  p.w.observers[0].cb([{ target: p.html.querySelector('[data-testid="page"]'), addedNodes: [late] }]); await sleep(250);
+  assert.ok(late.hasAttribute(A));
+});
+await t("v4.2.0: continuous mutations are capped by max-wait (scan still runs)", async () => {
+  const p = makePage(homeDom); run(p.w, true);
+  const page = p.html.querySelector('[data-testid="page"]');
+  const late = new El("a", { href: "/podcasts/ZZZZZZZZZZ/YYYYYYYYYY" }); page.appendChild(late);
+  const end = Date.now() + 1400; while (Date.now() < end && !late.hasAttribute(A)) { p.w.observers[0].cb([{ target: page }]); await sleep(60); }
+  assert.ok(late.hasAttribute(A), "scan ran despite constant mutations");
+});
+await t("regression: media added inside a hidden subtree triggers a scan that releases the shelf", async () => {
+  const p = makePage(homeDom); run(p.w, true);
+  const shelf = p.html.querySelectorAll('[data-testid="Shelf"]')[1]; assert.ok(shelf.hasAttribute(A));
+  const v = new El("video"); v.paused = false; shelf.children[1].appendChild(v);
+  p.w.observers[0].cb([{ target: shelf.children[1], addedNodes: [v] }]); await sleep(250);
+  assert.ok(!shelf.hasAttribute(A), "released");
+});
+await t("regression: play event (capture) on media in hidden subtree schedules a scan; listener removed on disable", async () => {
+  const v = new El("video");
+  const p = makePage(() => new El("div", { id: "root" }, [new El("div", { "data-testid": "CarouselItem", id: "card" }, [new El("a", { href: "/podcasts/CCCCCCCCCC/DDDDDDDDDD" }), v])]));
+  run(p.w, true);
+  const card = p.html.querySelector("#card"); assert.ok(card.hasAttribute(A));
+  const ls = p.doc.listeners.filter((l) => l.type === "play"); assert.equal(ls.length, 1); assert.equal(ls[0].cap, true);
+  v.paused = false; ls[0].fn({ target: v }); await sleep(250);
+  assert.ok(!card.hasAttribute(A), "released on play without any DOM mutation");
+  p.w.__amzHideSections.setEnabled("podcasts", false);
+  assert.equal(p.doc.listeners.filter((l) => l.type === "play").length, 0);
 });
 console.log(`\n${passed} tests passed`);

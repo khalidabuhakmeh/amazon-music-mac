@@ -234,4 +234,27 @@ final class PlayerStateTests: XCTestCase {
         XCTAssertFalse(CommandResult.parse("garbage").ok)
         XCTAssertEqual(CommandResult.parse("garbage").reason, "unparseable_result")
     }
+
+    /// Repeated identical messages must not fire Observation (each set notifies even when equal).
+    func testRepeatedMessagesDoNotNotifyObservers() {
+        let s = PlayerState(); let t0 = Date(timeIntervalSince1970: 1000)
+        s.apply(.ready(bridgeVersion: "3")); s.apply(st(), at: t0)
+        func fires(_ body: () -> Void) -> Bool {
+            let fired = FiredFlag()
+            withObservationTracking {
+                _ = s.track; _ = s.isPlaying; _ = s.bridgeHealthy; _ = s.lastError; _ = s.bridgeVersion
+                _ = s.upNext; _ = s.signedIn; _ = s.isLiked; _ = s.isShuffled; _ = s.repeatMode
+            } onChange: { fired.value = true }
+            body()
+            return fired.value
+        }
+        XCTAssertFalse(fires { s.apply(.position(position: 30, duration: 100), at: t0 + 1) })
+        XCTAssertFalse(fires { s.apply(self.st(), at: t0 + 2) })
+        XCTAssertFalse(fires { s.apply(.ready(bridgeVersion: "3")) })
+        s.apply(.error(code: "x", message: "boom"))
+        XCTAssertFalse(fires { s.apply(.error(code: "x", message: "boom")) })
+        XCTAssertFalse(fires { s.markUnhealthy("boom") })
+    }
 }
+
+final class FiredFlag: @unchecked Sendable { var value = false }

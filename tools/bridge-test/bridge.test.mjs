@@ -67,14 +67,14 @@ await t("state from mediaSession + VIDEO (AUDIO unused ignored)", async () => {
   const audio = new Media("AUDIO"); const video = new Media("VIDEO", { duration: 136.8, currentTime: 41, paused: false });
   const w = makePage({ media: [audio, video] }); w.load();
   const ready = w.messages.find((m) => m.type === "ready");
-  assert.equal(ready.payload.bridgeVersion, "1.7.1"); assert.equal(ready.v, 1);
+  assert.equal(ready.payload.bridgeVersion, "1.7.2"); assert.equal(ready.v, 1);
   assert.equal(ready.payload.sources.mediaSession, true);
   const s = states(w)[0];
   assert.deepEqual(s, { title: "Example Track", artist: "Example Artist", album: "Example Album",
     artworkURL: "https://music.amazon.com/big.jpg", duration: 136.8, position: 41, isPlaying: true,
     trackId: "Example Track|Example Artist|Example Album", liked: null, shuffle: null, repeat: null, queue: null, signedIn: null, canPlaySimilar: false, canJumpToQueueItem: false });
   assert.ok(w.messages.some((m) => m.type === "position"));
-  assert.equal(w.__amzBridge.version, "1.7.1");
+  assert.equal(w.__amzBridge.version, "1.7.2");
 });
 
 await t("track change -> new state; no duplicate when unchanged", async () => {
@@ -815,6 +815,72 @@ await t("playQueueItem: a controller that throws or rejects reports jump_failed,
   assert.deepEqual({ ...(await th.__amzBridge.playQueueItem("r6")) }, { ok: false, reason: "jump_failed" });
   const rj = jumpPage({ impl: () => Promise.reject(new Error("no")) }); rj.load(); await seedAndSettle(rj); rj.initController();
   assert.equal((await rj.__amzBridge.playQueueItem("r6")).ok, false);
+});
+
+// --- 1.7.2: leak/CPU fixes ---
+await t("detached media: idle off-DOM elements are pruned (only the most recent is kept)", async () => {
+  const w = makePage({ media: [] });
+  // A fresh class: the shared Media prototype was already hooked by an earlier page's bridge.
+  class M extends Media { play() { return super.play(); } }
+  w.HTMLMediaElement = M; w.load();
+  const old = new M("AUDIO", { duration: 500 }); const cur = new M("AUDIO", { duration: 100 });
+  // Not in the DOM (w.media is empty): only reachable through the play() hook's set.
+  old.play(); old.pause();
+  cur.play(); cur.pause();
+  // With nothing playing, pickMedia prefers the longest duration; a retained `old` would report 500.
+  assert.equal(w.__amzBridge.getState().duration, 100);
+  const extra = Array.from({ length: 10 }, () => new M("AUDIO", { duration: 50 }));
+  extra.forEach((m) => m.play()); // all playing: kept, but capped
+  assert.equal(w.__amzBridge.getState().isPlaying, true);
+});
+
+await t("detached media: the size cap never evicts an element that is still playing", async () => {
+  const w = makePage({ media: [] });
+  class M extends Media { play() { return super.play(); } }
+  w.HTMLMediaElement = M; w.load();
+  const els = Array.from({ length: 6 }, (_, i) => new M("AUDIO", { duration: 100, currentTime: 10 + i }));
+  els.forEach((m) => m.play()); // 6 playing, off-DOM: above the cap of 4
+  // pickMedia returns the first playing element in set order (the oldest); an evicted els[0] would report 12 or later.
+  assert.equal(w.__amzBridge.getState().position, 10);
+  els.slice(0, 5).forEach((m) => m.pause()); // now idle: pruned back down, the playing one survives
+  assert.equal(w.__amzBridge.getState().position, 15);
+  assert.equal(w.__amzBridge.getState().isPlaying, true);
+});
+
+await t("timeupdate runs a full check at most once per second", async () => {
+  const video = new Media("VIDEO", { duration: 100, paused: false });
+  const w = makePage({ media: [video] }); w.load();
+  video.emit("timeupdate");
+  const n = states(w).length;
+  w.navigator.mediaSession.metadata = { title: "Two", artist: "B", album: "C", artwork: [] };
+  video.emit("timeupdate"); video.emit("timeupdate");
+  assert.equal(states(w).length, n); // throttled
+  await sleep(1050);
+  video.emit("timeupdate");
+  assert.equal(states(w).length, n + 1); assert.equal(states(w).at(-1).title, "Two");
+  video.pause(); // non-timeupdate events are never throttled
+  assert.equal(states(w).at(-1).isPlaying, false);
+});
+
+await t("mutations: media added to the DOM is attached once per debounced check", async () => {
+  const w = makePage({ media: [] }); w.load();
+  const video = new Media("VIDEO", { duration: 100, paused: false });
+  w.media.push(video);
+  for (let i = 0; i < 20; i++) w.fireMutation();
+  assert.equal(video.listeners.pause, undefined); // not attached synchronously per mutation
+  await sleep(300);
+  assert.equal(video.listeners.pause.length, 1);
+  video.pause(); assert.equal(states(w).at(-1).isPlaying, false);
+});
+
+await t("localStorage entries are parsed once per check", async () => {
+  const w = makePage();
+  let reads = 0;
+  const store = { data: { _currentQueueId: "Q1", activeEntityReferenceId: "r0", currentTimeInSeconds: 1, duration: 10, currentEntity: { __typename: "Track" } } };
+  w.localStorage = { getItem: () => { reads++; return JSON.stringify(store); }, "x.cloud-queue-store.2": "", "1.playback-controller.1": "" };
+  w.load();
+  reads = 0; w.fireMutation(); await sleep(300);
+  assert.ok(reads <= 2, "reads=" + reads);
 });
 
 console.log(`\n${pass} passed, ${failN} failed`);

@@ -2,7 +2,7 @@
 // Injected at document start, main frame only. Never throws.
 (function () {
   "use strict";
-  const BRIDGE_VERSION = "1.7.1";
+  const BRIDGE_VERSION = "1.7.2";
 
   // The ONLY place DOM selectors live. Last-resort fallbacks; adjust here if the site changes.
   const SELECTORS = {
@@ -127,7 +127,7 @@
     if (proto && typeof proto.play === "function" && !proto.play.__amzHooked) {
       const orig = proto.play;
       const hooked = function () {
-        try { detached.add(this); attach(this); scheduleCheck(); } catch (e) {}
+        try { detached.delete(this); detached.add(this); attach(this); scheduleCheck(); } catch (e) {} // re-add = most recent last
         return orig.apply(this, arguments);
       };
       hooked.__amzHooked = true;
@@ -185,10 +185,27 @@
       return Object.assign({}, h);
     }, null);
   }
+  // localStorage `.data` lookups by key pattern. During one check() pass the same entries are read several times
+  // (queue store up to 3x, playback store), so results are memoised for that pass only (lsMemo is null otherwise).
+  let lsMemo = null;
+  // Runs fn with localStorage reads memoised for its duration (re-entrant: an outer pass keeps its memo).
+  function withLS(fn) {
+    if (lsMemo) return fn();
+    lsMemo = new Map();
+    try { return fn(); } finally { lsMemo = null; }
+  }
+  function readStoreData(re) {
+    if (lsMemo && lsMemo.has(re)) return lsMemo.get(re);
+    const d = safe(() => {
+      const k = Object.keys(window.localStorage).find((x) => re.test(x));
+      return k ? JSON.parse(window.localStorage.getItem(k)).data : null;
+    }, null);
+    if (lsMemo) lsMemo.set(re, d);
+    return d;
+  }
   function readQueueStore() {
     return safe(() => {
-      const k = Object.keys(window.localStorage).find((x) => QUEUE.storeKeyRe.test(x));
-      const d = k ? JSON.parse(window.localStorage.getItem(k)).data : null;
+      const d = readStoreData(QUEUE.storeKeyRe);
       const id = d && str(d._currentQueueId), ref = d && str(d.activeEntityReferenceId);
       return id && ref ? { queueId: id, ref: ref } : null;
     }, null);
@@ -471,7 +488,28 @@
     }
     return null;
   }
+  // `detached` holds strong refs (Audio() elements may never be in the DOM), so prune it: drop elements that are out of the DOM
+  // and not playing, except the most recently played one (a paused track still needs its duration/position). The size cap only
+  // ever evicts idle elements (oldest first): an element that is playing is never dropped, so the set can exceed the cap only
+  // while that many elements are actually playing.
+  const DETACHED_MAX = 4;
+  function pruneDetached() {
+    const list = Array.from(detached);
+    const last = list[list.length - 1];
+    const idle = (el) => safe(() => el.paused || el.ended, true);
+    for (const el of list) {
+      if (el === last) continue;
+      const connected = safe(() => el.isConnected === true, false);
+      if (!connected && idle(el)) detached.delete(el);
+    }
+    if (detached.size <= DETACHED_MAX) return;
+    for (const el of Array.from(detached)) { // insertion order = oldest first
+      if (detached.size <= DETACHED_MAX) break;
+      if (el !== last && idle(el)) detached.delete(el); // connected idle elements stay reachable via querySelectorAll
+    }
+  }
   function allMedia() {
+    safe(pruneDetached);
     const set = new Set(detached);
     safe(() => document.querySelectorAll("audio,video").forEach((e) => set.add(e)));
     return Array.from(set);
@@ -533,8 +571,7 @@
   }
   function readPlaybackStore() {
     return safe(() => {
-      const k = Object.keys(window.localStorage).find((x) => SELECTORS.playbackStoreKey.test(x));
-      const d = k ? JSON.parse(window.localStorage.getItem(k)).data : null;
+      const d = readStoreData(SELECTORS.playbackStoreKey);
       return d ? { position: finite(d.currentTimeInSeconds), duration: finite(d.duration),
         entityType: d.currentEntity && typeof d.currentEntity.__typename === "string" ? d.currentEntity.__typename : null,
         mediaType: d.currentEntity && typeof d.currentEntity.mediaType === "string" ? d.currentEntity.mediaType : null } : null;
@@ -649,7 +686,7 @@
   // --- change detection ---
   function check(force) {
     try {
-      const s = readState();
+      const s = withLS(readState);
       if (s.trackId !== lastTrackSeen) { // any track change (page buttons, media keys, natural end, our commands)
         lastTrackSeen = s.trackId; missTries = 0;
         safe(() => { if (!pcCache && pcAttempts >= PC_BACKOFF.length && Date.now() - pcLastEnd > 60000) { pcAttempts = PC_BACKOFF.length - 1; pcNextAt = 0; } });
@@ -670,17 +707,31 @@
       }
     } catch (e) { err("check_failed", e && e.message); }
   }
+  let attachPending = false;
   function scheduleCheck() {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => { debounceTimer = null; check(false); }, 250);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      if (attachPending) { attachPending = false; attachAll(); }
+      check(false);
+    }, 250);
   }
+  // play/pause/ended/seeked/metadata are rare and must be reflected at once; timeupdate fires ~4x/s while playing and only
+  // matters for the 1/s position message, so it runs a full check at most once per second.
   const EVENTS = ["play", "pause", "ended", "durationchange", "loadedmetadata", "seeked", "timeupdate"];
+  const TIMEUPDATE_MIN_MS = 1000;
+  let lastTimeupdateCheck = 0;
   const attached = new WeakSet();
   function attach(el) {
     try {
       if (attached.has(el)) return;
       attached.add(el);
       EVENTS.forEach((ev) => el.addEventListener(ev, () => {
+        if (ev === "timeupdate") {
+          const now = Date.now();
+          if (now - lastTimeupdateCheck < TIMEUPDATE_MIN_MS) return;
+          lastTimeupdateCheck = now;
+        }
         check(ev === "seeked"); // seek changes position only; force a state message
       }));
     } catch (e) {}
@@ -902,10 +953,11 @@
       }
       check(true);
       if (typeof MutationObserver === "function" && document.documentElement) {
-        new MutationObserver(() => { attachAll(); scheduleCheck(); })
+        // Coalesced: the page mutates constantly; attachAll() runs once per debounced check, not per mutation batch.
+        new MutationObserver(() => { attachPending = true; scheduleCheck(); })
           .observe(document.documentElement, { childList: true, subtree: true });
       }
-      setInterval(() => { attachAll(); check(false); safe(() => maybeRefreshQueue(false)); }, 2000);
+      setInterval(() => { attachAll(); withLS(() => { check(false); safe(() => maybeRefreshQueue(false)); }); }, 2000);
     } catch (e) { err("start_failed", e && e.message); }
   }
   if (document.readyState === "loading" && !document.documentElement) {

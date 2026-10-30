@@ -82,7 +82,7 @@ final class PlayerState {
     func apply(_ message: BridgeMessage, at now: Date = Date()) {
         switch message {
         case .ready(let version):
-            bridgeVersion = version
+            if bridgeVersion != version { bridgeVersion = version }
             markHealthy()
         case .state(let s):
             markHealthy()
@@ -118,8 +118,7 @@ final class PlayerState {
             if let p { position = p; positionTimestamp = now }
             if let d, var t = track, t.duration != d { t.duration = d; track = t }
         case .error(let code, let msg):
-            bridgeHealthy = false
-            lastError = msg ?? code ?? "Unknown bridge error"
+            markUnhealthy(msg ?? code ?? "Unknown bridge error")
         case .log, .unknown:
             break
         }
@@ -171,8 +170,8 @@ final class PlayerState {
     }
 
     func markUnhealthy(_ reason: String) {
-        bridgeHealthy = false
-        lastError = reason
+        if bridgeHealthy { bridgeHealthy = false }
+        if lastError != reason { lastError = reason }
     }
 
     private func markHealthy() {

@@ -4,7 +4,7 @@
 // DOM findings behind these selectors: docs/PODCASTS.md.
 (function () {
   "use strict";
-  const HIDE_SECTIONS_VERSION = "4.1.0";
+  const HIDE_SECTIONS_VERSION = "4.2.0";
 
   // The ONLY place DOM knowledge lives. Prefer data-testid / href / aria-label over class names
   // (classes are hashed react-native-web atoms and change between builds).
@@ -13,6 +13,8 @@
     attrPrefix: "data-amz-hide-", // + section id, e.g. data-amz-hide-podcasts
     styleId: "amz-hide-sections-style",
     debounceMs: 150,
+    maxWaitMs: 1000, // a continuously mutating page still gets scanned at least this often
+    idleTimeoutMs: 500,
     maxClimb: 14,
     cardContainers: ['[data-testid="CarouselItem"]', '[role="listitem"]', "li"],
     headingSelector: 'h1,h2,h3,h4,h5,h6,[role="heading"]',
@@ -103,7 +105,9 @@
     if (window.__amzHideSections && window.__amzHideSections.version) return; // idempotent
   } catch (e) { return; }
 
-  const state = { enabled: {}, observer: null, timer: null };
+  const state = { enabled: {}, observer: null, timer: null, idle: null, firstAt: 0, force: false, lastCost: 0 };
+  let ctx = null; // per-scan caches (headings, shelves, controls, protection); null outside scan()
+  const PROT = RULES.protectedSelectors.join(",");
   IDS.forEach((id) => { state.enabled[id] = false; });
 
   function safe(fn, fallback) { try { const r = fn(); return r === undefined ? fallback : r; } catch (e) { return fallback; } }
@@ -119,8 +123,10 @@
   // True if el is part of the player UI, contains it, or contains actively playing media.
   function isProtected(el) {
     return safe(() => {
-      const prot = RULES.protectedSelectors.join(",");
-      return !!(el.closest(prot) || el.querySelector(prot) || isPlayingMedia(el));
+      if (ctx && ctx.prot.has(el)) return ctx.prot.get(el);
+      const r = !!(el.closest(PROT) || el.querySelector(PROT) || isPlayingMedia(el));
+      if (ctx) ctx.prot.set(el, r);
+      return r;
     }, false);
   }
   function onKeepContentPage(sec) { return safe(() => !!sec.keepContentPathRx && sec.keepContentPathRx.test(location.pathname || ""), false); }
@@ -142,21 +148,38 @@
     }, el);
   }
 
-  function leafHeadings(root) {
-    return all(root, RULES.headingSelector).filter((h) => !safe(() => h.querySelector(RULES.headingSelector), null));
+  // Per scan: all leaf headings once, plus how many leaf headings sit under each ancestor (replaces a querySelectorAll per climb level).
+  function headingIndex() {
+    if (ctx.hi) return ctx.hi;
+    const hs = all(document, RULES.headingSelector);
+    const nonLeaf = new Set();
+    hs.forEach((h) => { for (let p = h.parentElement; p && !nonLeaf.has(p); p = p.parentElement) nonLeaf.add(p); });
+    const leaves = hs.filter((h) => !nonLeaf.has(h));
+    const counts = new Map();
+    leaves.forEach((h) => { for (let p = h.parentElement; p; p = p.parentElement) counts.set(p, (counts.get(p) || 0) + 1); });
+    return (ctx.hi = { leaves: leaves, counts: counts });
+  }
+  function hasStopChild(p) {
+    if (!ctx) return safe(() => !!p.querySelector(RULES.stopIfContains), false);
+    let r = ctx.stop.get(p);
+    if (r === undefined) { r = safe(() => !!p.querySelector(RULES.stopIfContains), false); ctx.stop.set(p, r); }
+    return r;
   }
   function headingText(h) {
     return safe(() => String(h.getAttribute("aria-label") || h.textContent || "").trim(), "");
   }
   // Climb from a heading while the parent still holds exactly that one heading (i.e. it is one shelf).
   function shelfFor(h) {
+    if (ctx && ctx.shelf.has(h)) return ctx.shelf.get(h);
+    const counts = headingIndex().counts;
     let cur = h;
     for (let i = 0; i < RULES.maxClimb; i++) {
       const p = cur.parentElement;
-      if (!p || isNever(p) || safe(() => p.querySelector(RULES.stopIfContains), null)) break;
-      if (leafHeadings(p).length !== 1) break;
+      if (!p || isNever(p) || hasStopChild(p)) break;
+      if (counts.get(p) !== 1) break;
       cur = p;
     }
+    if (ctx) ctx.shelf.set(h, cur);
     return cur;
   }
 
@@ -164,19 +187,28 @@
     return safe(() => Array.from(el.querySelectorAll("svg")).map((v) =>
       String(v.getAttribute("aria-label") || "") + " " + String((v.querySelector("title") || {}).textContent || "")).join(" ").trim(), "");
   }
+  // Per scan: every control's label texts / href computed once, shared by all sections that match controls.
+  function controlList() {
+    if (ctx.controls) return ctx.controls;
+    return (ctx.controls = all(document, RULES.controlSelector).map((el) => safe(() => {
+      const texts = [el.getAttribute("aria-label"), el.getAttribute("title"), svgText(el)];
+      const own = String(el.textContent || "").trim();
+      if (own.length <= RULES.controlTextMaxLen) texts.push(own);
+      return { el: el, texts: texts.filter(Boolean).map((t) => String(t).trim()), href: el.getAttribute("href"), nav: undefined };
+    }, null)).filter(Boolean));
+  }
   // Controls matched by aria-label / short own text / svg title / href. Only the control itself is hidden.
   function scanControls(id, sec) {
     if (!sec.controlLabelRx && !sec.controlHrefRx) return;
-    all(document, RULES.controlSelector).forEach((el) => {
+    controlList().forEach((c) => {
       safe(() => {
-        if (sec.controlScope === "nav" && !el.closest(RULES.navScopeSelector)) return;
-        const texts = [el.getAttribute("aria-label"), el.getAttribute("title"), svgText(el)];
-        const own = String(el.textContent || "").trim();
-        if (own.length <= RULES.controlTextMaxLen) texts.push(own);
-        const labelHit = sec.controlLabelRx && texts.some((t) => t && sec.controlLabelRx.test(String(t).trim()));
-        const href = el.getAttribute("href");
-        const hrefHit = sec.controlHrefRx && href && sec.controlHrefRx.test(href);
-        if (labelHit || hrefHit) mark(el, id);
+        if (sec.controlScope === "nav") {
+          if (c.nav === undefined) c.nav = !!c.el.closest(RULES.navScopeSelector);
+          if (!c.nav) return;
+        }
+        const labelHit = sec.controlLabelRx && c.texts.some((t) => sec.controlLabelRx.test(t));
+        const hrefHit = sec.controlHrefRx && c.href && sec.controlHrefRx.test(c.href);
+        if (labelHit || hrefHit) mark(c.el, id);
       });
     });
   }
@@ -187,7 +219,7 @@
     let cur = el;
     for (let i = 0; i < RULES.maxClimb; i++) {
       const p = cur.parentElement;
-      if (!p || isNever(p) || p.children.length !== 1 || safe(() => p.querySelector(RULES.stopIfContains), null)) break;
+      if (!p || isNever(p) || p.children.length !== 1 || hasStopChild(p)) break;
       cur = p;
     }
     return cur;
@@ -210,7 +242,7 @@
       // Nav/filter items are already handled; links inside protected UI are skipped by mark().
       mark(cardTarget(el), id);
     }));
-    leafHeadings(document).forEach((h) => {
+    headingIndex().leaves.forEach((h) => {
       const t = headingText(h);
       if (sec.headingTextRx && t && t.length <= RULES.headingMaxLen && !RULES.headingExcludeRx.test(t) && sec.headingTextRx.test(t)) {
         mark(shelfFor(h), id);
@@ -221,13 +253,17 @@
 
   // A shelf whose cards were ALL hidden (e.g. "True Crime Editor's Picks" on Home holding only podcasts) would remain as
   // an empty heading + "See More" row, so the whole shelf is hidden too. Mixed shelves (some visible cards) are kept.
+  const ANY_HIDDEN = IDS.map((sid) => "[" + attrOf(sid) + "]").join(",");
   function isHiddenByAny(el) {
-    return IDS.some((sid) => {
-      const a = "[" + attrOf(sid) + "]";
-      return safe(() => el.matches(a) || !!el.closest(a) || !!el.querySelector(a), false);
-    });
+    return safe(() => el.matches(ANY_HIDDEN) || !!el.closest(ANY_HIDDEN) || !!el.querySelector(ANY_HIDDEN), false);
   }
   function shelfCards(shelf) {
+    if (ctx.cards.has(shelf)) return ctx.cards.get(shelf);
+    const r = shelfCardsRaw(shelf);
+    ctx.cards.set(shelf, r);
+    return r;
+  }
+  function shelfCardsRaw(shelf) {
     for (const s of RULES.cardContainers) {
       const found = all(shelf, s).filter((c) => !safe(() => c.parentElement && c.parentElement.closest(s) && shelf.contains(c.parentElement.closest(s)), false));
       if (found.length) return found;
@@ -236,7 +272,7 @@
   }
   function hideEmptiedShelves(id) {
     const own = "[" + attrOf(id) + "]";
-    leafHeadings(document).forEach((h) => safe(() => {
+    headingIndex().leaves.forEach((h) => safe(() => {
       const shelf = shelfFor(h);
       if (!shelf || shelf === h || shelf.hasAttribute(attrOf(id))) return;
       const cards = shelfCards(shelf);
@@ -250,13 +286,52 @@
   function scan() {
     if (!anyEnabled()) return;
     safe(ensureStyle);
-    IDS.forEach((id) => { if (state.enabled[id]) safe(() => scanSection(id)); });
+    const t0 = safe(() => Date.now(), 0);
+    ctx = { hi: null, stop: new Map(), shelf: new Map(), cards: new Map(), prot: new Map(), controls: null };
+    try { IDS.forEach((id) => { if (state.enabled[id]) safe(() => scanSection(id)); }); } finally { ctx = null; }
+    state.lastCost = safe(() => Date.now(), 0) - t0;
   }
 
-  function schedule() {
+  // Mutations that cannot change what gets hidden: our own <style>, the player UI, and anything inside an already hidden subtree.
+  const IGNORE_TARGET = "#" + RULES.styleId + "," + PROT + "," + ANY_HIDDEN;
+  function addsMedia(r) {
+    const added = r && r.addedNodes;
+    if (!added) return false;
+    return Array.prototype.some.call(added, (n) => safe(() => !!n && (
+      (typeof n.matches === "function" && n.matches(RULES.mediaSelector)) ||
+      (typeof n.querySelector === "function" && !!n.querySelector(RULES.mediaSelector))), false));
+  }
+  // 'play' does not bubble: capture on document. Lets the scan release a hidden shelf whose media started playing without a DOM mutation.
+  function onPlay() { schedule(); }
+  function relevant(records) {
+    if (!records || !records.length) return true; // unknown (history/popstate/manual): always scan
+    return records.some((r) => safe(() => {
+      if (addsMedia(r)) return true; // media added anywhere (even in a hidden subtree) may need the protection-release step
+      const t = r.target;
+      return !(t && t.closest && t.closest(IGNORE_TARGET));
+    }, true));
+  }
+  function runScan() {
+    state.timer = null; state.idle = null; state.firstAt = 0; state.force = false;
+    scan();
+  }
+  // Debounced (resets on each burst) but capped by maxWaitMs; waits longer when scans are expensive; uses idle time if available.
+  function schedule(records) {
     safe(() => {
-      if (state.timer) return;
-      state.timer = window.setTimeout(() => { state.timer = null; scan(); }, RULES.debounceMs);
+      if (!Array.isArray(records) || !records.length) state.force = true;
+      if (!state.force && !relevant(records)) return;
+      if (state.idle != null) return;
+      const now = Date.now();
+      if (!state.firstAt) state.firstAt = now;
+      if (state.timer) window.clearTimeout(state.timer);
+      const wait = Math.max(RULES.debounceMs, Math.min(state.lastCost * 4, RULES.maxWaitMs));
+      const delay = Math.max(0, Math.min(wait, state.firstAt + Math.max(RULES.maxWaitMs, wait) - now));
+      state.timer = window.setTimeout(() => {
+        state.timer = null;
+        if (typeof window.requestIdleCallback === "function") {
+          state.idle = window.requestIdleCallback(runScan, { timeout: RULES.idleTimeoutMs });
+        } else runScan();
+      }, delay);
     });
   }
 
@@ -296,15 +371,18 @@
     safe(() => {
       if (state.observer || typeof MutationObserver !== "function") return;
       const root = document.documentElement || document;
-      state.observer = new MutationObserver(schedule);
+      state.observer = new MutationObserver((records) => schedule(records));
       state.observer.observe(root, { childList: true, subtree: true });
+      if (document.addEventListener) document.addEventListener("play", onPlay, true);
     });
   }
   function stopObserver() {
     safe(() => { if (state.observer) state.observer.disconnect(); });
+    safe(() => { if (document.removeEventListener) document.removeEventListener("play", onPlay, true); });
     state.observer = null;
     safe(() => { if (state.timer) window.clearTimeout(state.timer); });
-    state.timer = null;
+    safe(() => { if (state.idle != null && typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(state.idle); });
+    state.timer = null; state.idle = null; state.firstAt = 0; state.force = false;
   }
 
   function setEnabled(id, on) {
@@ -340,7 +418,7 @@
       if (typeof orig !== "function") return;
       h[m] = function () { const r = orig.apply(this, arguments); schedule(); return r; };
     });
-    if (window.addEventListener) { window.addEventListener("popstate", schedule); window.addEventListener("hashchange", schedule); }
+    if (window.addEventListener) { window.addEventListener("popstate", () => schedule()); window.addEventListener("hashchange", () => schedule()); }
   });
   // At document start the DOM is empty: scan again once it is parsed.
   safe(() => { document.addEventListener("DOMContentLoaded", () => { if (anyEnabled()) scan(); }); });
