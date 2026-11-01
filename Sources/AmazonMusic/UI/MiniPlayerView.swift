@@ -5,6 +5,8 @@ struct MiniPlayerView: View {
     /// Test/preview seams (default off): inject a cover image and force the hover state.
     var coverOverride: NSImage?
     var forceHover = false
+    /// Forces Up Next expanded/collapsed (snapshots/previews) instead of the stored preference.
+    var upNextExpanded: Bool?
     @Environment(PlayerState.self) private var player
     @Environment(PlayerBridge.self) private var bridge
 
@@ -40,7 +42,7 @@ struct MiniPlayerView: View {
         .padding(.horizontal, Self.padding)
         .padding(.vertical, Self.padding)
         if track != nil, !player.upNext.isEmpty {
-            UpNextSection(items: player.upNext)
+            UpNextSection(items: player.upNext, expandedOverride: upNextExpanded)
         }
         }
         .frame(width: Self.width)
@@ -108,7 +110,9 @@ enum UpNextRowKeys {
 
 private struct UpNextSection: View {
     let items: [BridgeMessage.QueueItem]
-    @AppStorage("upNextExpanded") private var expanded = false
+    var expandedOverride: Bool?
+    @AppStorage("upNextExpanded") private var storedExpanded = false
+    private var expanded: Bool { expandedOverride ?? storedExpanded }
     @Environment(PlayerState.self) private var player
     @Environment(PlayerBridge.self) private var bridge
     private static let rowHeight: CGFloat = 36
@@ -173,7 +177,7 @@ private struct UpNextSection: View {
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.primary.opacity(0.6))
     }
 
-    private func toggle() { withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() } }
+    private func toggle() { withAnimation(.easeInOut(duration: 0.18)) { storedExpanded.toggle() } }
 }
 
 /// One upcoming song. When `playable` (expanded list), the whole row is a button that plays it (hover highlight + play icon
@@ -506,59 +510,28 @@ private struct MiniProgress: View {
 }
 
 #if DEBUG
-@MainActor private func previewModel(track: Bool, playing: Bool, liked: Bool? = nil,
-                                  shuffle: Bool? = nil, repeatMode: RepeatMode? = nil, title: String = "A Fairly Long Track Title That Wraps To Two Lines") -> (PlayerState, PlayerBridge) {
-    let s = PlayerState()
-    if track {
-        s.apply(.state(.init(trackId: "t1", title: title, artist: "Some Artist",
-                             album: "Album", artworkURL: nil, duration: 245, position: 83, isPlaying: playing, liked: liked, shuffle: shuffle, repeatMode: repeatMode)))
-    } else {
-        s.markUnhealthy("preview")
-    }
-    return (s, PlayerBridge(state: s))
-}
-
-#Preview("Up Next (collapsed/expanded persisted state)") {
-    let (s, b) = previewModel(track: true, playing: true, liked: false, shuffle: false, repeatMode: .off)
-    s.apply(.state(.init(trackId: "t1", title: "Now", artist: "Artist", album: "A", artworkURL: nil, duration: 245, position: 83, isPlaying: true,
-                         queue: (1...10).map { .init(title: "Upcoming song \($0)", artist: "Artist \($0)", artworkURL: nil) })))
-    return MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Playing, shuffle on, repeat all") {
-    let (s, b) = previewModel(track: true, playing: true, liked: false, shuffle: true, repeatMode: .all)
-    MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Repeat one") {
-    let (s, b) = previewModel(track: true, playing: true, liked: true, shuffle: false, repeatMode: .one, title: "Short Title")
-    MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Playing") {
-    let (s, b) = previewModel(track: true, playing: true)
-    MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Liked unknown / long title") {
-    let (s, b) = previewModel(track: true, playing: true, liked: nil)
-    MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Liked") {
-    let (s, b) = previewModel(track: true, playing: true, liked: true)
-    MiniPlayerView().environment(s).environment(b)
-}
-#Preview("Paused") {
-    let (s, b) = previewModel(track: true, playing: false, liked: false, shuffle: false, repeatMode: .off)
-    MiniPlayerView().environment(s).environment(b)
-}
+#Preview("Up Next expanded") { fixturePreview(.upNextExpanded) }
+#Preview("Up Next collapsed") { fixturePreview(.upNextCollapsed) }
+#Preview("Playing, shuffle on, repeat all") { fixturePreview(.shuffleRepeatAll) }
+#Preview("Repeat one") { fixturePreview(.repeatOne) }
+#Preview("Playing") { fixturePreview(.playing) }
+#Preview("Liked unknown / long title") { fixturePreview(.likedUnknownLongTitle) }
+#Preview("Liked") { fixturePreview(.liked) }
+#Preview("Paused") { fixturePreview(.paused) }
 #Preview("Heart overlay: liked / not liked") {
-    let a = previewModel(track: true, playing: true, liked: true)
-    let b = previewModel(track: true, playing: true, liked: false)
+    let a = PlayerStateFixtures.liked.make()
+    let b = PlayerStateFixtures.paused.make()
     VStack(spacing: 0) {
         MiniPlayerView().environment(a.0).environment(a.1)
         MiniPlayerView(forceHover: true).environment(b.0).environment(b.1)
         MiniPlayerView().environment(b.0).environment(b.1)
     }
 }
-#Preview("No track") {
-    let (s, b) = previewModel(track: false, playing: false)
-    MiniPlayerView().environment(s).environment(b)
+#Preview("No track") { fixturePreview(.noTrack) }
+#Preview("Bridge unhealthy") { fixturePreview(.bridgeUnhealthy) }
+
+@MainActor private func fixturePreview(_ f: PlayerStateFixtures) -> some View {
+    let (s, b) = f.make()
+    return MiniPlayerView(upNextExpanded: f.upNextExpanded).environment(s).environment(b)
 }
 #endif

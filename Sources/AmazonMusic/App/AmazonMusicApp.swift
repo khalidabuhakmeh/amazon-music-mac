@@ -11,21 +11,24 @@ struct AmazonMusicApp: App {
     private let notifications: NotificationController // strong ref for app lifetime
 
     init() {
+        let mode = LaunchMode.current
         let s = AppSettings()
-        let w = WebController(settings: s)
+        let w = WebController(settings: s) // creates the WKWebView but does not load anything
         let p = PlayerState()
         let b = PlayerBridge(state: p)
         AppDelegate.pending = (p, b)
-        // Order matters: register script + handler first, THEN the first load.
-        b.install(on: w)
-        w.installHideSections()
-        w.start()
         let np = NowPlayingController(state: p, bridge: b)
-        np.start()
-        nowPlaying = np
-        let nc = NotificationController(state: p, settings: s)
+        let nc = NotificationController(state: p, settings: s, dryRun: mode != .normal)
         nc.onOpenMainWindow = { MainWindowCoordinator.shared.open() }
-        nc.start()
+        if mode == .normal {
+            // Order matters: register script + handler first, THEN the first load.
+            b.install(on: w)
+            w.installHideSections()
+            w.start()
+            np.start()
+            nc.start()
+        } // --snapshot/--selftest: no bridge, no load, no integrations; AppDelegate runs the runner and exits.
+        nowPlaying = np
         notifications = nc
         _settings = State(initialValue: s)
         _web = State(initialValue: w)
@@ -42,12 +45,13 @@ struct AmazonMusicApp: App {
                 .environment(bridge)
         }
         .defaultSize(width: 1100, height: 760)
+        .defaultLaunchBehavior(LaunchMode.current == .normal ? .automatic : .suppressed)
         .commands { AboutCommands(player: player) }
         #if DEBUG
         .commands { DebugCommands(bridge: bridge) }
         #endif
 
-        MenuBarExtra(isInserted: Bindable(settings).showMenuBar) {
+        MenuBarExtra(isInserted: LaunchMode.current == .normal ? Bindable(settings).showMenuBar : .constant(false)) {
             MiniPlayerView()
                 .environment(player)
                 .environment(bridge)

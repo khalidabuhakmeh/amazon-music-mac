@@ -28,7 +28,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         })
 
-    func applicationDidFinishLaunching(_ notification: Notification) { statusMenu.start() }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        switch LaunchMode.current {
+        case .normal:
+            statusMenu.start()
+        case .snapshot(let dir):
+            NSApp.setActivationPolicy(.accessory)
+            closeAllWindows()
+            exit(SnapshotRunner.run(outDir: dir))
+        case .selftest:
+            NSApp.setActivationPolicy(.accessory)
+            closeAllWindows()
+            Task { @MainActor in exit(await SelfTest.run()) }
+        }
+    }
+
+    /// Backup for `.defaultLaunchBehavior(.suppressed)`: nothing but the runner's offscreen windows may show.
+    private func closeAllWindows() { for w in NSApp.windows { w.close() } }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

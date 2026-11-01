@@ -2,12 +2,20 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
+enum SettingsTab: String, CaseIterable, Hashable {
+    case general, notifications, advanced
+}
+
 struct SettingsView: View {
+    @State private var tab: SettingsTab
+
+    init(tab: SettingsTab = .general) { _tab = State(initialValue: tab) }
+
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            NotificationSettings().tabItem { Label("Notifications", systemImage: "bell") }
-            AdvancedSettings().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
+        TabView(selection: $tab) {
+            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
+            NotificationSettings().tabItem { Label("Notifications", systemImage: "bell") }.tag(SettingsTab.notifications)
+            AdvancedSettings().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag(SettingsTab.advanced)
         }
         .frame(width: 480, height: 340)
     }

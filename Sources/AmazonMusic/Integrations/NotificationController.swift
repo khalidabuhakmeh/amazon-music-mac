@@ -31,10 +31,13 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored private var consumer: Task<Void, Never>?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var center: UNUserNotificationCenter? {
-        Bundle.main.bundleURL.pathExtension == "app" ? UNUserNotificationCenter.current() : nil
+        !dryRun && Bundle.main.bundleURL.pathExtension == "app" ? UNUserNotificationCenter.current() : nil
     }
+    /// Smoke tests/snapshots: never touch UNUserNotificationCenter (no authorization prompt, nothing posted).
+    @ObservationIgnored private let dryRun: Bool
 
-    init(state: PlayerState, settings: AppSettings) {
+    init(state: PlayerState, settings: AppSettings, dryRun: Bool = false) {
+        self.dryRun = dryRun
         self.state = state
         self.settings = settings
         super.init()
