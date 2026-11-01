@@ -22,8 +22,8 @@ enum DockMenuModel {
             .init(id: "nowPlaying", title: header, enabled: false, action: nil),
             .separator,
             .init(id: "playPause", title: isPlaying ? "Pause" : "Play", enabled: true, action: .playPause),
-            .init(id: "next", title: "Next", enabled: true, action: .next),
-            .init(id: "previous", title: "Previous", enabled: true, action: .previous),
+            .init(id: "next", title: PlayerAction.next.title, enabled: true, action: .next),
+            .init(id: "previous", title: PlayerAction.previous.title, enabled: true, action: .previous),
         ]
     }
 }

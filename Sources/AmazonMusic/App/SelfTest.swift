@@ -30,7 +30,7 @@ enum SelfTest {
     }
 
     static func checkSymbols() -> String? {
-        let missing = symbolNames.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
+        let missing = (symbolNames + PlayerAction.allCases.map(\.systemImage)).filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }
         return missing.isEmpty ? nil : "unresolved symbols: \(missing.joined(separator: ", "))"
     }
 

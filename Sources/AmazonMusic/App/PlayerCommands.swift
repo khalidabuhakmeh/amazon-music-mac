@@ -35,14 +35,14 @@ enum ControlsMenuModel {
         let rep: String = switch i.repeatMode { case .all: "Repeat: All"; case .one: "Repeat: One"; default: "Repeat: Off" }
         return [
             Item(action: .playPause, title: i.isPlaying ? "Pause" : "Play", enabled: track, shortcut: .init(key: .char("p"))),
-            Item(action: .next, title: "Next", enabled: track, shortcut: .init(key: .right)),
-            Item(action: .previous, title: "Previous", enabled: track, shortcut: .init(key: .left)),
+            Item(action: .next, title: PlayerAction.next.title, enabled: track, shortcut: .init(key: .right)),
+            Item(action: .previous, title: PlayerAction.previous.title, enabled: track, shortcut: .init(key: .left)),
             Item(action: .like, title: i.liked == true ? "Unlike" : "Like", enabled: track && i.liked != nil, shortcut: .init(key: .char("l"))),
-            Item(action: .shuffle, title: "Shuffle", enabled: track && i.shuffled != nil, checked: i.shuffled == true,
+            Item(action: .shuffle, title: PlayerAction.shuffle.title, enabled: track && i.shuffled != nil, checked: i.shuffled == true,
                  shortcut: .init(key: .char("s"), option: true)),
             Item(action: .cycleRepeat, title: rep, enabled: track && i.repeatMode != nil, checked: i.repeatMode.map { $0 != .off } ?? false,
                  shortcut: .init(key: .char("r"), option: true)),
-            Item(action: .playSimilar, title: "Play Similar", enabled: track && i.canPlaySimilar, shortcut: .init(key: .char("s"), shift: true)),
+            Item(action: .playSimilar, title: PlayerAction.similar.title, enabled: track && i.canPlaySimilar, shortcut: .init(key: .char("s"), shift: true)),
         ]
     }
 

@@ -17,8 +17,8 @@ enum StatusMenuModel {
     static func build(isPlaying: Bool, isLiked: Bool? = nil, isShuffled: Bool? = nil, repeatMode: RepeatMode? = nil, canPlaySimilar: Bool = false) -> [StatusMenuItemModel] {
         var items: [StatusMenuItemModel] = [
             .init(title: isPlaying ? "Pause" : "Play", action: .playPause),
-            .init(title: "Next", action: .next),
-            .init(title: "Previous", action: .previous),
+            .init(title: PlayerAction.next.title, action: .next),
+            .init(title: PlayerAction.previous.title, action: .previous),
         ]
         if let isLiked { items.append(.init(title: isLiked ? "Unlike" : "Like", action: .toggleLike)) }
         // Titles name what the click does (like Like/Unlike); items are absent when the page exposes no control.
