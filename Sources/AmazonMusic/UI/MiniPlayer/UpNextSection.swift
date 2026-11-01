@@ -130,7 +130,7 @@ struct UpNextRow: View {
         .task(id: item.artworkURL) {
             // Keep the previous image until the new one loads (no flicker when the queue shifts); clear only if there is no artwork.
             guard let url = item.artworkURL else { image = nil; return }
-            if let loaded = await ArtworkCache.shared.image(for: url) { image = loaded }
+            if let loaded = await ArtworkCache.shared.image(for: url, maxPixelSize: ArtworkCache.rowPixels) { image = loaded }
         }
         if playable {
             Button(action: onPlay) { content }

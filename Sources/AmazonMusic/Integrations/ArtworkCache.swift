@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import OSLog
 
 /// Downloads artwork (https only), caches in memory and on disk (Caches/<bundle id>/artwork).
@@ -9,8 +10,14 @@ actor ArtworkCache {
     static let maxDiskFiles = 100
     private static let log = Logger(subsystem: "com.khalidabuhakmeh.amazonmusic", category: "artwork")
 
-    private var memory: [URL: NSImage] = [:]
-    private var order: [URL] = []
+    /// Pixel sizes used by callers (display points x 2 backing scale, rounded up).
+    static let coverPixels = 256      // mini player cover, 120 pt
+    static let rowPixels = 64         // Up Next row, 28 pt
+    static let nowPlayingPixels = 512 // Control Center / Now Playing
+
+    private struct Key: Hashable { let url: URL; let pixels: Int }
+    private var memory: [Key: NSImage] = [:]
+    private var order: [Key] = []
     private let memoryLimit = 20
     private let directory: URL
     private let session: URLSession
@@ -24,11 +31,41 @@ actor ArtworkCache {
         self.session = session
     }
 
-    func image(for url: URL) async -> NSImage? {
-        if let img = memory[url] { return img }
-        guard let file = await fileURL(for: url), let img = NSImage(contentsOf: file) else { return nil }
-        remember(img, for: url)
+    func image(for url: URL, maxPixelSize: Int = ArtworkCache.nowPlayingPixels) async -> NSImage? {
+        let key = Key(url: url, pixels: maxPixelSize)
+        if let img = memory[key] { return img }
+        guard let file = await fileURL(for: url) else { return nil }
+        // Decode off the actor; only a Sendable CGImage crosses back.
+        guard let cg = await Task.detached(priority: .utility, operation: { Self.decodeThumbnail(file: file, maxPixelSize: maxPixelSize) }).value else { return nil }
+        let img = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        remember(img, for: key)
         return img
+    }
+
+    /// Decodes at most `maxPixelSize` px on the long edge (never the full-size bitmap).
+    nonisolated static func decodeThumbnail(data: Data, maxPixelSize: Int) -> CGImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return thumbnail(src, maxPixelSize)
+    }
+
+    nonisolated static func decodeThumbnail(file: URL, maxPixelSize: Int) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(file as CFURL, nil) else { return nil }
+        return thumbnail(src, maxPixelSize)
+    }
+
+    nonisolated private static func thumbnail(_ src: CGImageSource, _ maxPixelSize: Int) -> CGImage? {
+        guard maxPixelSize > 0, CGImageSourceGetCount(src) > 0 else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
+
+    nonisolated static func isDecodable(_ data: Data) -> Bool {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        return CGImageSourceGetCount(src) > 0 && CGImageSourceGetStatus(src) != .statusInvalidData
     }
 
     /// Local file URL (valid .jpg/.png extension) for the artwork, downloading if needed. nil on failure.
@@ -46,7 +83,7 @@ actor ArtworkCache {
             let (data, response) = try await session.data(for: req)
             guard data.count <= Self.maxBytes, !data.isEmpty,
                   (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
-                  NSImage(data: data) != nil else { return nil }
+                  Self.isDecodable(data) else { return nil }
             try fm.createDirectory(at: directory, withIntermediateDirectories: true)
             let ext = Self.isPNG(data) ? "png" : "jpg"
             let final = target.appendingPathExtension(ext)
@@ -68,10 +105,10 @@ actor ArtworkCache {
 
     private static func isPNG(_ d: Data) -> Bool { d.starts(with: [0x89, 0x50, 0x4E, 0x47]) }
 
-    private func remember(_ img: NSImage, for url: URL) {
-        memory[url] = img
-        order.removeAll { $0 == url }
-        order.append(url)
+    private func remember(_ img: NSImage, for key: Key) {
+        memory[key] = img
+        order.removeAll { $0 == key }
+        order.append(key)
         while order.count > memoryLimit { memory[order.removeFirst()] = nil }
     }
 

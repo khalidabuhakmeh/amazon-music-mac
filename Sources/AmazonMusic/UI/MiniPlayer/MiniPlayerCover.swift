@@ -57,7 +57,7 @@ struct CoverArt: View {
             .task(id: track?.artworkURL) {
                 image = nil
                 guard let url = track?.artworkURL else { return }
-                image = await ArtworkCache.shared.image(for: url)
+                image = await ArtworkCache.shared.image(for: url, maxPixelSize: ArtworkCache.coverPixels)
             }
     }
 }
