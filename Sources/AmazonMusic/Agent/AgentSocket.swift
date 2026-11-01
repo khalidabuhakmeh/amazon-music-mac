@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OSLog
+import os
 
 /// A Unix domain socket that only this Mac user can open. The app listens; the CLI connects,
 /// sends one JSON line (at most 64 KB) and reads one JSON line back.
@@ -102,17 +103,48 @@ nonisolated enum AgentSocket {
             unlink(path)
             return
         }
-        Thread.detachNewThread {
-            while true {
-                let client = accept(server, nil, nil)
-                if client < 0 {
-                    if errno == EINTR || errno == ECONNABORTED { continue }
-                    usleep(100_000)
-                    continue
-                }
-                Thread.detachNewThread { serve(client, handle: handle) }
+        let limits = Limits.standard
+        Thread.detachNewThread { acceptLoop(server, limits: limits, handle: handle) }
+    }
+
+    /// Limits for the server side. Tests pass smaller ones.
+    struct Limits: Sendable {
+        var maxConnections = 8
+        var readDeadline: TimeInterval = 10
+        var writeDeadline: TimeInterval = 10
+        static let standard = Limits()
+    }
+
+    /// Accepts forever. Over the cap, the new connection gets a one-line "busy" error and is closed;
+    /// no thread is created for it.
+    static func acceptLoop(_ server: Int32, limits: Limits, handle: @escaping @MainActor @Sendable (Data) async -> Data) {
+        let limiter = ConnectionLimiter(limit: limits.maxConnections)
+        while true {
+            let client = accept(server, nil, nil)
+            if client < 0 {
+                if errno == EBADF || errno == EINVAL { return }
+                if errno == EINTR || errno == ECONNABORTED { continue }
+                usleep(100_000)
+                continue
+            }
+            guard limiter.acquire() else {
+                rejectBusy(client)
+                continue
+            }
+            Thread.detachNewThread {
+                defer { limiter.release() }
+                serve(client, limits: limits, handle: handle)
             }
         }
+    }
+
+    private static func rejectBusy(_ client: Int32) {
+        defer { close(client) }
+        var on: Int32 = 1
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
+        let line = JSON.data(AgentError(code: "busy", message: "the app has too many open agent connections. Try again in a moment", exit: 1).json) + Data("\n".utf8)
+        line.withUnsafeBytes { _ = Darwin.write(client, $0.baseAddress!, $0.count) } // best effort, never blocks
     }
 
     private final class ReplyBox: @unchecked Sendable {
@@ -127,7 +159,7 @@ nonisolated enum AgentSocket {
         }
     }
 
-    private static func serve(_ client: Int32, handle: @escaping @MainActor @Sendable (Data) async -> Data) {
+    private static func serve(_ client: Int32, limits: Limits, handle: @escaping @MainActor @Sendable (Data) async -> Data) {
         defer { close(client) }
         guard peerIsCurrentUser(client) else {
             log.error("rejected a connection from another user")
@@ -135,16 +167,15 @@ nonisolated enum AgentSocket {
         }
         var on: Int32 = 1
         setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-        var timeout = timeval(tv_sec: 5, tv_usec: 0)
-        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        guard let request = readLine(client, limit: maxRequestBytes), !request.isEmpty else {
-            write(client, JSON.data(AgentError.usage("request must be one JSON line of at most 64 KB").json) + Data("\n".utf8))
+        _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
+        guard let request = readLine(client, limit: maxRequestBytes, deadline: Deadline(after: limits.readDeadline)), !request.isEmpty else {
+            write(client, JSON.data(AgentError.usage("request must be one JSON line of at most 64 KB").json) + Data("\n".utf8), deadline: Deadline(after: min(limits.writeDeadline, 2)))
             return
         }
         let box = ReplyBox()
         Task { @MainActor in box.set(await handle(request)) }
         let reply = box.wait(seconds: 30) ?? JSON.data(AgentError.invalid("the app did not answer in time").json)
-        write(client, reply + Data("\n".utf8))
+        write(client, reply + Data("\n".utf8), deadline: Deadline(after: limits.writeDeadline))
     }
 
     // MARK: CLI side
@@ -218,14 +249,77 @@ nonisolated enum AgentSocket {
         return data.count > limit ? nil : data
     }
 
-    private static func write(_ socket: Int32, _ data: Data) {
+    /// Writes everything or gives up. With a deadline the socket must be non-blocking.
+    private static func write(_ socket: Int32, _ data: Data, deadline: Deadline? = nil) {
         data.withUnsafeBytes { raw in
             var offset = 0
             while offset < raw.count {
                 let sent = Darwin.write(socket, raw.baseAddress! + offset, raw.count - offset)
-                if sent <= 0 { return }
-                offset += sent
+                if sent > 0 { offset += sent; continue }
+                guard let deadline, sent < 0, errno == EAGAIN || errno == EINTR else { return }
+                if errno == EAGAIN, !deadline.wait(socket, events: Int16(POLLOUT)) { return }
+                if deadline.isExpired { return }
             }
         }
     }
+
+    /// Like `readLine`, but the whole line must arrive before `deadline`, however slowly it trickles.
+    /// The socket must be non-blocking. nil when too long or too slow.
+    static func readLine(_ socket: Int32, limit: Int, deadline: Deadline) -> Data? {
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16_384)
+        while true {
+            let count = read(socket, &buffer, buffer.count)
+            if count < 0, errno == EAGAIN || errno == EINTR {
+                if deadline.isExpired || (errno == EAGAIN && !deadline.wait(socket, events: Int16(POLLIN))) { return nil }
+                continue
+            }
+            if count <= 0 { break }
+            if let newline = buffer[0..<count].firstIndex(of: UInt8(ascii: "\n")) {
+                data.append(buffer, count: newline)
+                break
+            }
+            data.append(buffer, count: count)
+            if data.count > limit { return nil }
+            if deadline.isExpired { return nil }
+        }
+        return data.count > limit ? nil : data
+    }
+}
+
+
+/// A wall-clock limit on a monotonic clock.
+nonisolated struct Deadline: Sendable {
+    let end: ContinuousClock.Instant
+    init(after seconds: TimeInterval) { end = .now + .milliseconds(Int(max(0, seconds) * 1000)) }
+
+    var remaining: Duration { max(.zero, end - .now) }
+    var isExpired: Bool { ContinuousClock.now >= end }
+
+    /// Waits until `events` are ready on `fd` or the deadline passes. false on timeout.
+    func wait(_ fd: Int32, events: Int16) -> Bool {
+        let left = remaining
+        let ms = Int32(min(Int64(1000), left.components.seconds * 1000 + left.components.attoseconds / 1_000_000_000_000_000))
+        guard ms > 0 || !isExpired else { return false }
+        var item = pollfd(fd: fd, events: events, revents: 0)
+        _ = poll(&item, 1, max(1, ms))
+        return !isExpired || item.revents != 0
+    }
+}
+
+/// Counts open connections and refuses new ones over the limit.
+nonisolated final class ConnectionLimiter: Sendable {
+    let limit: Int
+    private let count = OSAllocatedUnfairLock(initialState: 0)
+    init(limit: Int) { self.limit = limit }
+
+    func acquire() -> Bool {
+        count.withLock { value in
+            guard value < limit else { return false }
+            value += 1
+            return true
+        }
+    }
+    func release() { count.withLock { $0 = max(0, $0 - 1) } }
+    var active: Int { count.withLock { $0 } }
 }
