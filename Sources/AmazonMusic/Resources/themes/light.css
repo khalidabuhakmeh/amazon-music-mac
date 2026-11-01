@@ -1,0 +1,106 @@
+/*
+ * Amazon Music web UI: Light theme. See docs/THEMES.md.
+ *
+ * Amazon's player is react-native-web: no custom elements, no Shadow DOM, no CSS custom properties.
+ * Colors are written as inline style="" attributes (and a few r-* atomic classes) using a tiny fixed
+ * palette, so this theme re-maps those exact values with attribute selectors + !important:
+ *   white text      rgb(255, 255, 255)  -> --t1      grey text   rgb(163, 163, 163) -> --t2
+ *   accent          rgb(37, 209, 218)   -> --acc (text/icons) ; filled accent buttons keep the cyan
+ *   page black      rgb(0, 0, 0) / rgb(20, 25, 26) -> --bg ; chrome rgba(25,25,25,.7) -> --chrome
+ *   hairline        rgba(255, 255, 255, 0.15) -> --line ; fill rgba(255,255,255,.15) -> --fill
+ * Artwork (img / background-image / video / canvas) is never touched.
+ * Selector forms: text color is matched as  [style^="color: X"], [style*="; color: X"]  so that
+ * "background-color: X" never matches it. SVG icons use the fill="..." attribute.
+ */
+:root {
+  --amz-bg: #f4f6f7;
+  --amz-surface: #ffffff;
+  --amz-chrome: rgba(255, 255, 255, 0.86);
+  --amz-t1: #14191a;
+  --amz-t2: #596269;
+  --amz-acc: #0a7b86;
+  --amz-acc-fill: #25d1da;
+  --amz-line: rgba(20, 25, 26, 0.14);
+  --amz-fill: rgba(20, 25, 26, 0.07);
+  --amz-fill-2: rgba(20, 25, 26, 0.16);
+  --amz-shadow: 0 1px 3px rgba(20, 25, 26, 0.12), 0 0 0 1px rgba(20, 25, 26, 0.04);
+}
+
+/* ---- Page & chrome ---- */
+html, body, #root { background-color: var(--amz-bg) !important; color: var(--amz-t1) !important; }
+[data-testid="Page"],
+[style*="background-color: rgb(0, 0, 0);"], [style*="background-color: rgb(0, 0, 0)"],
+[style*="background-color:rgb(20, 25, 26)"], [style*="background-color: rgb(20, 25, 26)"] { background-color: var(--amz-bg) !important; }
+/* top bar (opaque band + blurred glass layer) */
+[style*="border-bottom-color: rgba(255, 255, 255, 0.15)"][style*="background-color: rgb(0, 0, 0)"] { background-color: var(--amz-surface) !important; border-bottom-color: var(--amz-line) !important; }
+[style*="background-color: rgba(25, 25, 25, 0.7)"] { background-color: var(--amz-chrome) !important; }
+
+/* ---- Text ---- */
+[style^="color: rgb(255, 255, 255)"], [style*="; color: rgb(255, 255, 255)"] { color: var(--amz-t1) !important; }
+[style^="color: rgb(163, 163, 163)"], [style*="; color: rgb(163, 163, 163)"],
+[style^="color: rgb(161, 161, 161)"], [style*="; color: rgb(161, 161, 161)"],
+[style^="color: rgb(155, 161, 166)"], [style*="; color: rgb(155, 161, 166)"],
+[style^="color: rgba(255, 255, 255, 0.65)"], [style*="; color: rgba(255, 255, 255, 0.65)"],
+[style^="color: rgba(255, 255, 255, 0.7)"], [style*="; color: rgba(255, 255, 255, 0.7)"],
+[style^="color: rgba(255, 255, 255, 0.6)"], [style*="; color: rgba(255, 255, 255, 0.6)"],
+[style^="color: rgba(255, 255, 255, 0.5)"], [style*="; color: rgba(255, 255, 255, 0.5)"] { color: var(--amz-t2) !important; }
+/* dimmed / inactive lyric lines etc. */
+[style^="color: rgba(255, 255, 255, 0.3)"], [style*="; color: rgba(255, 255, 255, 0.3)"],
+[style^="color: rgba(255, 255, 255, 0.4)"], [style*="; color: rgba(255, 255, 255, 0.4)"] { color: rgba(20, 25, 26, 0.46) !important; }
+[style^="color: rgba(255, 255, 255, 0.8)"], [style*="; color: rgba(255, 255, 255, 0.8)"],
+[style^="color: rgba(255, 255, 255, 0.85)"], [style*="; color: rgba(255, 255, 255, 0.85)"],
+[style^="color: rgba(255, 255, 255, 0.9)"], [style*="; color: rgba(255, 255, 255, 0.9)"] { color: var(--amz-t1) !important; }
+[style^="color: rgb(37, 209, 218)"], [style*="; color: rgb(37, 209, 218)"] { color: var(--amz-acc) !important; }
+[style^="color: rgb(82, 169, 255)"], [style*="; color: rgb(82, 169, 255)"] { color: #0b5fcc !important; }
+.r-jwli3a { color: var(--amz-t1) !important; }
+.r-c68hjy, .r-kizejy { color: var(--amz-t2) !important; }
+::selection { background: rgba(10, 123, 134, 0.28) !important; color: inherit !important; }
+
+/* ---- Icons ---- */
+[fill="rgb(255, 255, 255)"], [fill="white"], [fill="#fff"], [fill="#ffffff"] { fill: var(--amz-t1) !important; }
+[fill="rgba(255, 255, 255, 0.65)"], [fill="rgb(163, 163, 163)"] { fill: var(--amz-t2) !important; }
+[fill="rgba(255, 255, 255, 0.3)"] { fill: rgba(20, 25, 26, 0.35) !important; }
+[fill="rgb(37, 209, 218)"] { fill: var(--amz-acc) !important; }
+/* the white wordmark logos are <img> files: render them as ink (logo only, never artwork) */
+img[src*="/music/logo/"] { filter: brightness(0) !important; }
+
+/* ---- Borders, secondary buttons, tiles ---- */
+[style*="border-color: rgba(255, 255, 255, 0.15)"] { border-color: var(--amz-line) !important; }
+[style*="border-color: rgba(255, 255, 255, 0.65)"] { border-color: var(--amz-t2) !important; }
+[style*="background-color: rgba(255, 255, 255, 0.15)"], .r-17u3ijr { background-color: var(--amz-fill-2) !important; }
+[style*="background-color: rgba(255, 255, 255, 0.3)"] { background-color: rgba(20, 25, 26, 0.28) !important; }
+[data-testid="PlaceholderArt"] { background-color: #e3e7ea !important; }
+/* explicit-content / quality badges: white chip -> grey chip */
+[data-testid*="Badge"][style*="background-color: rgb(255, 255, 255)"] { background-color: #dde2e5 !important; }
+/* progress thumb/fill (white bar sliding in from right:100%) -> ink. Other white surfaces (search field) stay white. */
+[style*="right: 100%"][style*="background-color: rgb(255, 255, 255)"] { background-color: var(--amz-t1) !important; }
+[style*="border-radius: 9999px"][style*="background-color: rgb(255, 255, 255)"] { box-shadow: inset 0 0 0 1px var(--amz-line) !important; }
+input::placeholder { color: var(--amz-t2) !important; opacity: 1; }
+input { --placeholderTextColor: #596269 !important; }
+
+/* album / playlist / artist pages: blurred cover art fading to black -> fading to the page color */
+[data-testid="LinearGradient"][style*="rgb(0, 0, 0) 100%"] { background-image: linear-gradient(rgba(244, 246, 247, 0.45), rgba(244, 246, 247, 0.78) 50%, #f4f6f7 100%) !important; }
+
+/* ---- Menus, popovers, dialogs (Radix: role=menu / dialog / tooltip) ---- */
+[role="menu"][style], [role="dialog"][style], [role="alertdialog"][style], [role="listbox"][style], [role="tooltip"][style] {
+  background-color: var(--amz-surface) !important;
+  box-shadow: 0 8px 28px rgba(20, 25, 26, 0.18), 0 0 0 1px var(--amz-line) !important;
+}
+[role="menuitem"][data-highlighted], [role="menuitem"]:hover, [role="option"][data-highlighted] { background-color: var(--amz-fill) !important; outline: none !important; }
+[role="menuitem"]:focus, [role="menuitem"]:focus-visible { outline: none !important; }
+[role="menu"] [style^="color: rgba(255, 255, 255, 0.65)"], [role="menu"] [style*="; color: rgba(255, 255, 255, 0.65)"] { color: var(--amz-t1) !important; }
+[role="dialog"] [style*="background-color: rgb(0, 0, 0)"], [role="dialog"] [style*="background-color: rgb(20, 25, 26)"] { background-color: var(--amz-surface) !important; }
+
+/* ---- Scrollbars ---- */
+::-webkit-scrollbar-thumb { background-color: rgba(20, 25, 26, 0.3) !important; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent !important; }
+
+/* ---- Focus ---- */
+button:focus-visible, a:focus-visible, input:focus-visible, [role="button"]:focus-visible, [role="link"]:focus-visible, [role="slider"]:focus-visible { outline: 2px solid var(--amz-acc) !important; outline-offset: 2px; }
+[tabindex="-1"]:focus, [tabindex="-1"]:focus-visible, h1:focus-visible, h2:focus-visible, h3:focus-visible { outline: none !important; }
+
+/* ---- Text that sits ON artwork / gradients keeps its original light color (must stay last) ---- */
+[data-testid*="ThumbnailButton"] [style*="color:"], [data-testid*="TopRecommender"] [style*="color:"],
+[data-testid*="TopRecommender"] [style*="color:"] * { color: #ffffff !important; }
+[data-testid*="Tile"] [fill], [style*="rgba(0, 0, 0, 0.65)"] [fill],
+[data-testid*="ThumbnailButton"] [fill], [data-testid*="TopRecommender"] [fill] { fill: #ffffff !important; }

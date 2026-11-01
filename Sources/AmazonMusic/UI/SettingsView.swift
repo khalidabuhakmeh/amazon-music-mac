@@ -56,6 +56,11 @@ private struct GeneralSettings: View {
             if login.needsApproval {
                 Button("Open Login Items Settings") { SystemLoginItem.openSystemSettings() }
             }
+            Picker("Theme", selection: $settings.theme) {
+                ForEach(Theme.available, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Text("Restyles the Amazon Music web player. Depends on Amazon's page layout and may need updating if it changes.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Show menu bar icon", isOn: $settings.showMenuBar)
             Toggle("Hide podcasts", isOn: $settings.hidePodcasts)
             Toggle("Hide Audible", isOn: $settings.hideAudible)

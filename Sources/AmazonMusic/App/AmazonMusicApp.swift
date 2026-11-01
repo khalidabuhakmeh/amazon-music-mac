@@ -26,6 +26,7 @@ struct AmazonMusicApp: App {
             AppDependencyManager.shared.add(dependency: p)
             // Order matters: register script + handler first, THEN the first load.
             b.install(on: w)
+            w.installTheme()
             w.installHideSections()
             w.start()
             np.start()

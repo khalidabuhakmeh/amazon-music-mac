@@ -31,6 +31,9 @@ final class AppSettings {
     /// Hides the Home page hero banner (hideSections.js, section "homeBanner"). Default true when never set.
     var hideHomeBanner: Bool { didSet { defaults.set(hideHomeBanner, forKey: Self.hideHomeBannerKey) } }
     static let hideHomeBannerKey = "hideHomeBanner"
+    /// Web UI theme (injected CSS). Applied live by WebController. Unknown stored value => .default.
+    var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Self.themeKey) } }
+    static let themeKey = "theme"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -43,6 +46,7 @@ final class AppSettings {
         hideAudible = defaults.object(forKey: Self.hideAudibleKey) as? Bool ?? true // default ON only if never set
         hideGetApp = defaults.object(forKey: Self.hideGetAppKey) as? Bool ?? true
         hideHomeBanner = defaults.object(forKey: Self.hideHomeBannerKey) as? Bool ?? true
+        theme = Theme(stored: defaults.string(forKey: Self.themeKey))
     }
 }
 

@@ -28,6 +28,28 @@ final class WebController {
     }
     @ObservationIgnored private var userScripts: [WKUserScript] = []
     @ObservationIgnored private var hideSectionsSource: String?
+    @ObservationIgnored private var themeHelperSource: String?
+
+    /// Loads themeHelper.js and registers it with the current theme baked in (document start, main frame).
+    func installTheme() {
+        guard let url = Bundle.main.url(forResource: "themeHelper", withExtension: "js"),
+              let src = try? String(contentsOf: url, encoding: .utf8) else { return }
+        themeHelperSource = src
+        rebuildUserScripts()
+        applyTheme()
+    }
+
+    /// Applies the current theme to the loaded page (live switch, and after each navigation finishes).
+    func applyTheme() {
+        guard themeHelperSource != nil else { return }
+        let t = settings.theme
+        webView.evaluateJavaScript(ThemeScript.applyCall(css: t.loadCSS(), colorScheme: t.colorScheme), completionHandler: nil)
+        if let c = t.underPageRGB {
+            webView.underPageBackgroundColor = NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: 1)
+        } else {
+            webView.underPageBackgroundColor = nil
+        }
+    }
 
     /// Loads hideSections.js from the bundle and registers it (main frame, document start) with the current
     /// settings (hidePodcasts, hideAudible, hideGetApp) baked in. Call before the first load, after the bridge install.
@@ -40,13 +62,21 @@ final class WebController {
 
     /// WKUserScripts can't be edited, so rebuild the set: bridge/other scripts unchanged + hide script with the
     /// current flag, so future page loads start in the right state without a flash.
-    private func refreshHideSectionsScript() {
-        guard let src = hideSectionsSource else { return }
+    private func refreshHideSectionsScript() { rebuildUserScripts() }
+
+    private func rebuildUserScripts() {
         let ucc = configuration.userContentController
         ucc.removeAllUserScripts()
         userScripts.forEach { ucc.addUserScript($0) }
-        ucc.addUserScript(WKUserScript(source: HideSectionsScript.source(base: src, podcasts: settings.hidePodcasts, audible: settings.hideAudible, getApp: settings.hideGetApp, homeBanner: settings.hideHomeBanner),
-                                       injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        if let src = themeHelperSource {
+            let t = settings.theme
+            ucc.addUserScript(WKUserScript(source: ThemeScript.source(helper: src, css: t.loadCSS(), colorScheme: t.colorScheme),
+                                           injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        if let src = hideSectionsSource {
+            ucc.addUserScript(WKUserScript(source: HideSectionsScript.source(base: src, podcasts: settings.hidePodcasts, audible: settings.hideAudible, getApp: settings.hideGetApp, homeBanner: settings.hideHomeBanner),
+                                           injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
     }
 
     /// Applies the setting to the already-loaded page (live toggle, and after each navigation finishes).
@@ -102,7 +132,9 @@ final class WebController {
     @ObservationIgnored private var appliedUA: String?
     private struct Hide: Equatable { var podcasts: Bool; var audible: Bool; var getApp: Bool; var homeBanner: Bool }
     @ObservationIgnored private var appliedHide = Hide(podcasts: false, audible: false, getApp: false, homeBanner: false)
+    @ObservationIgnored private var appliedTheme: Theme = .default
     private func observeSettings() {
+        appliedTheme = settings.theme
         appliedHide = Hide(podcasts: settings.hidePodcasts, audible: settings.hideAudible, getApp: settings.hideGetApp, homeBanner: settings.hideHomeBanner)
         appliedStartURL = settings.startURL
         appliedUA = settings.customUserAgent
@@ -113,6 +145,7 @@ final class WebController {
             _ = settings.hideAudible
             _ = settings.hideGetApp
             _ = settings.hideHomeBanner
+            _ = settings.theme
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -123,6 +156,10 @@ final class WebController {
                 if Hide(podcasts: self.settings.hidePodcasts, audible: self.settings.hideAudible, getApp: self.settings.hideGetApp, homeBanner: self.settings.hideHomeBanner) != self.appliedHide {
                     self.refreshHideSectionsScript()
                     self.applyHideSections()
+                }
+                if self.settings.theme != self.appliedTheme {
+                    self.rebuildUserScripts()
+                    self.applyTheme()
                 }
                 if self.settings.startURL != self.appliedStartURL { self.goHome() }
                 self.observeSettings()
@@ -197,6 +234,7 @@ private final class WebDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        controller?.applyTheme()
         controller?.applyHideSections() // page loads/SPA reloads reset in-page state
     }
 
@@ -213,3 +251,4 @@ struct MusicWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView { controller.webView }
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
+
