@@ -13,13 +13,17 @@ struct MainWindow: View {
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
                     Button { web.goBack() } label: { Label("Back", systemImage: "chevron.left") }
+                        .help("Back (⌘[)")
                         .disabled(!web.canGoBack)
                     Button { web.goForward() } label: { Label("Forward", systemImage: "chevron.right") }
+                        .help("Forward (⌘])")
                         .disabled(!web.canGoForward)
                 }
                 ToolbarItemGroup {
                     Button { web.reload() } label: { Label("Reload", systemImage: "arrow.clockwise") }
+                        .help("Reload (⌘R)")
                     Button { web.goHome() } label: { Label("Home", systemImage: "house") }
+                        .help("Home (⇧⌘H)")
                 }
             }
     }

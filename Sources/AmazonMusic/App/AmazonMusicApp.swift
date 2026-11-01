@@ -47,9 +47,7 @@ struct AmazonMusicApp: App {
         .defaultSize(width: 1100, height: 760)
         .defaultLaunchBehavior(LaunchMode.current == .normal ? .automatic : .suppressed)
         .commands { AboutCommands(player: player) }
-        #if DEBUG
-        .commands { DebugCommands(bridge: bridge) }
-        #endif
+        .commands { PlayerCommands(player: player, bridge: bridge, web: web) }
 
         MenuBarExtra(isInserted: LaunchMode.current == .normal ? Bindable(settings).showMenuBar : .constant(false)) {
             MiniPlayerView()
@@ -70,22 +68,3 @@ struct AmazonMusicApp: App {
         }
     }
 }
-
-#if DEBUG
-struct DebugCommands: Commands {
-    let bridge: PlayerBridge
-    var body: some Commands {
-        CommandMenu("Debug") {
-            Button("Play/Pause") { Task { await bridge.send(.toggle) } }
-            Button("Next") { Task { await bridge.send(.next) } }
-            Button("Previous") { Task { await bridge.send(.previous) } }
-            Button("Seek +10s") {
-                Task {
-                    let p = bridge.state.interpolatedPosition(at: Date())
-                    await bridge.send(.seek(p + 10))
-                }
-            }
-        }
-    }
-}
-#endif

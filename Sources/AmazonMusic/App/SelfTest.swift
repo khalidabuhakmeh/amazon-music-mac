@@ -13,7 +13,10 @@ enum SelfTest {
     ]
 
     /// Expected menu item titles per top-level menu (filled in with the Controls menu).
-    static let expectedMenuTitles: [String: [String]] = [:]
+    static let expectedMenuTitles: [String: [String]] = [
+        "Controls": ["Play", "Next", "Previous", "Like", "Shuffle", "Repeat: Off", "Play Similar"],
+        "View": ["Back", "Forward", "Reload", "Home"],
+    ]
 
     static func run() async -> Int32 {
         var failed = false
