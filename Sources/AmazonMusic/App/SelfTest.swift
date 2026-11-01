@@ -26,8 +26,19 @@ enum SelfTest {
         report("sf-symbols", checkSymbols())
         report("menu-titles", checkMenuTitles())
         report("url-router", checkURLRouter())
+        report("intent-titles", checkIntentTitles())
         report("integrations-smoke", await integrationsSmoke())
         return failed ? 1 : 0
+    }
+
+    static func checkIntentTitles() -> String? {
+        let pairs: [(PlayerAction, LocalizedStringResource)] = [
+            (.toggle, PlayPauseIntent.title), (.next, NextTrackIntent.title), (.previous, PreviousTrackIntent.title),
+            (.like, LikeTrackIntent.title), (.similar, PlaySimilarIntent.title),
+        ]
+        for (a, t) in pairs where String(localized: t) != a.title { return "intent title mismatch for \(a.rawValue)" }
+        if NowPlayingIntent.describe(nil) != "Nothing playing" { return "now playing empty text" }
+        return nil
     }
 
     static func checkURLRouter() -> String? {

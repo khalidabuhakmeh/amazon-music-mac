@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 @main
@@ -22,6 +23,8 @@ struct AmazonMusicApp: App {
         let nc = NotificationController(state: p, settings: s, dryRun: mode != .normal)
         nc.onOpenMainWindow = { MainWindowCoordinator.shared.open() }
         if mode == .normal {
+            AppDependencyManager.shared.add(dependency: b)
+            AppDependencyManager.shared.add(dependency: p)
             // Order matters: register script + handler first, THEN the first load.
             b.install(on: w)
             w.installHideSections()
