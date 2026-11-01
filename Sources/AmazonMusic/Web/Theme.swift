@@ -7,7 +7,7 @@ enum Theme: String, CaseIterable, Sendable {
     case `default`, light, synthwave, cyberpunk, vampire
 
     /// Themes shown in Settings (those with a finished CSS file).
-    static let available: [Theme] = [.default, .light]
+    static let available: [Theme] = [.default, .light, .synthwave, .cyberpunk, .vampire]
 
     /// Unknown / missing stored value falls back to `.default`.
     init(stored: String?) { self = stored.flatMap(Theme.init(rawValue:)) ?? .default }
@@ -30,7 +30,13 @@ enum Theme: String, CaseIterable, Sendable {
 
     /// Window / under-page background to avoid flashes. nil => system default.
     var underPageRGB: (r: Double, g: Double, b: Double)? {
-        self == .light ? (0.97, 0.97, 0.98) : nil
+        switch self {
+        case .light: (0.97, 0.97, 0.98)
+        case .synthwave: (0.071, 0.039, 0.165)   // #120a2a
+        case .cyberpunk: (0.043, 0.043, 0.059)   // #0b0b0f
+        case .vampire: (0.039, 0.016, 0.020)     // #0a0405
+        case .default: nil
+        }
     }
 
     func loadCSS(bundle: Bundle = .main) -> String? {

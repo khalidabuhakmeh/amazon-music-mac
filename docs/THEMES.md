@@ -25,11 +25,37 @@ Settings → General → Theme and applied live (no reload). `Default` means *no
 
 ## Adding a theme
 
-1. Create `Sources/AmazonMusic/Resources/themes/<name>.css` (copy `light.css`, change the palette).
+1. Create `Sources/AmazonMusic/Resources/themes/<name>.css` (light.css is the full-remap pattern; the dark themes below only re-map what differs from Amazon's native dark palette).
 2. Add the case to `Theme` (already declared for synthwave, cyberpunk, vampire), set `colorScheme` / `underPageRGB` if needed, and
    append it to `Theme.available`.
-3. `ThemeTests` automatically checks the CSS file is bundled, non-empty, and has no `filter: invert`.
+3. `ThemeTests` automatically checks the CSS file is bundled, non-empty, has no `filter: invert`, no `@import`/`url(`/`http(s)://` (themes are fully offline), and that every theme's CSS is distinct.
 4. Verify in the real signed-in app (see below) on Home, Search, Library, an album page, the transport bar, a menu and the lyrics view.
+
+## Dark themes: Synthwave, Cyberpunk, Vampire
+
+Picker order: Default, Light, Synthwave, Cyberpunk, Vampire. All three set `color-scheme: dark` and an `underPageRGB` equal to their page color.
+They re-map: page/top-bar/chrome backgrounds, primary/secondary/dim text, accent text + icons (`rgb(37,209,218)`), accent *fills*
+(inline `background-color: rgb(37,209,218)` **and** the CSS-module primary button `button[class*="_accent"][class*="_filled"]`; label color
+is forced to the "on-fill" color), hairlines/secondary fills, the progress fill (gradient), the detail-page `LinearGradient` fade (fades to the page color), menus/dialogs, scrollbars, selection and focus rings.
+Artwork is never filtered; text on artwork stays white (last block). Cyberpunk additionally uses 2–3px radii on buttons/inputs/menus (never on artwork tiles) and a thin yellow edge on the player bar.
+
+| Theme | page | surface (top bar, menus) | text / secondary | accent text | accent fill (label) | glow / lines |
+|---|---|---|---|---|---|---|
+| Synthwave | `#120a2a` | `#1c1040` | `#f6eeff` / `#b9a7e0` | `#2de2e6` cyan | `#ff2bd6` magenta (`#120a2a`); progress gradient `#ff2bd6→#ff8a3d` | magenta glow `rgba(255,43,214,.35)`, cyan hairlines |
+| Cyberpunk | `#0b0b0f` | `#14141b` | `#f4f4f0` / `#a9acb8` | `#fcee09` yellow | `#fcee09` (`#0b0b0f`); progress `#fcee09→#ff003c`; cyan `#00f0ff` secondary fills, red `#ff003c` selection | yellow hairlines, cyan glow |
+| Vampire | `#0a0405` | `#1a0508` | `#efe6e1` / `#b49ea3` | `#ff4d63` | `#c4122f` (`#ffffff`); progress `#8f0e24→#e01b3c`; `#2b0a10`-range burgundy washes | crimson glow `rgba(224,27,60,.3)` |
+
+WCAG contrast (computed from the hex values, sRGB relative luminance; all ≥ 4.5:1):
+
+| Theme | text / page | secondary / page | accent text / page | dim (inactive lyrics, .62 alpha) / page | text / secondary / accent on surface | label on accent fill |
+|---|---|---|---|---|---|---|
+| Synthwave | 16.9 | 8.8 | 11.9 | 6.8 | 15.5 / 8.1 / 11.0 | 6.0 |
+| Cyberpunk | 17.8 | 8.7 | 16.3 | 7.1 | 16.6 / 8.1 / 15.2 | 16.3 |
+| Vampire | 16.5 | 8.1 | 6.3 | 6.5 | 16.0 / 7.8 / 6.1 | 6.0 |
+
+Glow is `box-shadow` / one `text-shadow` on accent text only (Synthwave, 8px, same hue) so it never sits behind body text.
+CSS-module class names (`_accent`, `_filled`) have a build hash prefix; selectors use `[class*=…]` substrings, so a hash change is harmless but a rename of those words would need a CSS fix.
+Screenshots: `docs/screenshots/themes/{synthwave,vampire}-*.png` (cyberpunk screenshots were verified live but not saved; see the task report).
 
 ## What Amazon's DOM looks like (investigated Nov 2026, signed-in)
 

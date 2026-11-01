@@ -25,7 +25,7 @@ struct ThemeTests {
 
     @Test func displayNamesAndAvailability() {
         #expect(Theme.allCases.map(\.displayName) == ["Default", "Light", "Synthwave", "Cyberpunk", "Vampire"])
-        #expect(Theme.available == [.default, .light])
+        #expect(Theme.available == [.default, .light, .synthwave, .cyberpunk, .vampire])
         #expect(Theme.default.cssResource == nil)
     }
 
@@ -109,5 +109,20 @@ struct ThemeTests {
         let css = try #require(theme.loadCSS(bundle: bundle), "missing \(theme.rawValue).css in bundle")
         #expect(css.trimmingCharacters(in: .whitespacesAndNewlines).count > 200)
         #expect(!css.contains("filter: invert")) // themes must not invert artwork
+        #expect(!css.contains("@import"))        // fully offline
+        #expect(!css.contains("url("))
+        #expect(!css.contains("http://") && !css.contains("https://"))
+    }
+
+    @Test func eachThemeHasDistinctCSSAndScheme() {
+        let themes = Theme.available.filter { $0 != .default }
+        let css = themes.compactMap { $0.loadCSS(bundle: bundle) }
+        #expect(css.count == themes.count)
+        #expect(Set(css).count == css.count)
+        #expect(Set(themes.map(\.cssResource)).count == themes.count)
+        for t in [Theme.synthwave, .cyberpunk, .vampire] {
+            #expect(t.colorScheme == "dark")
+            #expect(t.underPageRGB != nil)
+        }
     }
 }
