@@ -107,3 +107,28 @@ Spike `SPIKE_PROBE=1` eval loop (temporary, removed). `/` at ~1100px: the top of
 - Only active when `location.pathname` is `/` or `/home`; leaving the route removes the mark (unhide). Re-evaluated via `history.pushState/replaceState`, `popstate`, `hashchange` hooks plus the existing MutationObserver. Hiding is CSS `display:none !important` via `[data-amz-hide-homeBanner]`.
 - Live verification (script injected after load): hidden=1, root height 0, first shelf header moved to the top (y=64, same as list top: no gap); nav, Get App, search, player untouched. Library tab: unhidden (0 marks); Home tab: re-hidden (1); `setEnabled('homeBanner', false)`: banner back (300px).
 - Unverified: other banner variants (only one hero seen; other accounts/ad types may use other testids), pre-hydration flash (no CSS-only rule: JS applies within ~150ms of render).
+
+## Top bar spacing (v4.3.0): hidden items must not leave gaps
+Symptom: with sections hidden the nav read `Home | Music | (big gap) | Library`, and the right side had a doubled gap before the avatar.
+Root cause (live DOM, react-native-web, 1240 px wide): the rows are flex containers with a CSS `gap` (nav `24px`, right cluster `24px`,
+narrow window `16px`) and items are not always direct children, so hiding only the control leaves its empty wrapper as a zero-width flex item,
+and every flex item costs one gap on each side.
+- Nav: `header > div > nav(flex row, gap 24) > [button Home, button Music, div(wrapper) > button TopNavBar_AudiobooksTab, button TopNavBar_PodcastTab, button Library]`.
+  The Podcasts tab is a direct child (hiding it leaves no gap); the Audible tab sits in a one-child `div`, which stayed (w=0) -> Music..Library gap 24+24 = 48 px.
+- Right cluster: `div(flex row, gap 24) > [a search, div(row, gap 24) > [div(gap 12) > div > button Button,GetAppButton, div OverflowMenu_Menu]]`.
+  The Get App chain of two single-child divs stayed -> search..menu gap 48 px. (Get App is outside `header`.)
+- Search filter pills (`/search/<q>`): row of 11 items, each `div > [div > button Pill_x, empty div w=12 (spacer)]`. Hiding the pill left the
+  12 px spacer: audiobook (-1 pill) gap 24, podcast + podcastEpisode gap 36 instead of 12.
+Fix (`markControl` in hideSections.js): for hidden controls (match `button,a,[role=button],[role=link]`: nav tabs, Get App, pills) also hide the wrapper chain
+upwards while the parent's only other children are empty spacer `div/span`s (none or more), stopping before the shared row (it has other real children),
+a never-hide element, protected UI or anything holding the search box. Structural only (no hashed classes). Same attribute, so the toggle restores the wrapper too.
+Not needed: margin/flex-grow zeroing (no neighbour margins or grow spacers were found in the bar). The pre-hydration CSS still hides only the control itself, so the wrapper collapses at the first scan (one scan after DOMContentLoaded).
+Measured gaps between visible items (px, `getBoundingClientRect`), before -> after, wide 1240 / narrow 900:
+| toggles | nav (wide) | right (wide) | nav (narrow) | right (narrow) |
+|---|---|---|---|---|
+| all off | 24,24,24,24 | 24,24 | 16,16,16,16 | 16,16 |
+| all on | 24,**48** -> 24,24 | **48** -> 24 | 16,**32** -> 16,16 | **32** -> 16 |
+| podcasts only | 24,24,24 (no gap before) | 24,24 | | |
+| audible only | 24,**48**,24 -> 24,24,24 | | | |
+| getApp only | | **48** -> 24 | | **32** -> 16 |
+Search pills: 12,24,12,12,12,36 -> 12 everywhere. Screenshots: `docs/screenshots/topbar-before.png`, `topbar-after.png` (all hidden, dark; light theme verified live too).

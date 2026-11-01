@@ -370,6 +370,69 @@ await t("homeBanner: no match on non-home route, off by default, independent, hi
   assert.equal(r.html.querySelectorAll("[data-amz-hide-homeBanner]").length, 1);
 });
 
+// ---- v4.3.0 top bar spacing: hidden nav/header/pill items take their wrapper (and spacer-only siblings) with them ----
+// Real structure (docs/PODCASTS.md): header > nav(flex row, gap) > [Home, Music, div>AudiobooksTab, PodcastTab, Library];
+// right cluster row(gap) > [search, div>div>GetApp, overflow]; pill row > per pill: div > [div > pill, empty 12px spacer div].
+function topBarDom() {
+  const btn = (tid, label) => new El("button", { "data-testid": tid, "aria-label": label || tid });
+  const pill = (k) => new El("div", { "data-testid": "pillItem_" + k }, [new El("div", {}, [new El("button", { "data-testid": "Button,SearchResultsTypeFilter_Pill_" + k })]), new El("div", { "data-testid": "spacer_" + k })]);
+  return new El("div", { id: "root" }, [
+    new El("header", {}, [
+      new El("div", { "data-testid": "logo" }, [new El("div", {}, [new El("img", {})])]),
+      new El("nav", { "data-testid": "navrow" }, [
+        btn("TopNavBar_HomeTab", "Home"), btn("TopNavBar_MusicTab", "Music"),
+        new El("div", { "data-testid": "audibleWrap" }, [btn("TopNavBar_AudiobooksTab", "Audiobook")]),
+        btn("TopNavBar_PodcastTab", "Podcasts"), btn("TopNavBar_LibraryTab", "Library"),
+      ]),
+    ]),
+    new El("div", { "data-testid": "rightRow" }, [
+      new El("a", { href: "/search", role: "link", "aria-label": "Find Music" }),
+      new El("div", { "data-testid": "getAppOuter" }, [new El("div", { "data-testid": "getAppInner" }, [new El("div", { "data-testid": "getAppWrap" }, [new El("button", { "data-testid": "Button,GetAppButton", "aria-label": "Get App" })])])]),
+      new El("div", { "data-testid": "OverflowMenu_Menu" }, [new El("button", { "aria-label": "Go to settings" })]),
+    ]),
+    new El("div", { "data-testid": "pillRow" }, ["album", "artist", "podcast", "podcastEpisode", "audiobook", "song"].map(pill)),
+  ]);
+}
+const allEls = (root) => root.children.flatMap((c) => [c, ...allEls(c)]);
+const byTid = (p, tid) => allEls(p.html).find((e) => e.attrs["data-testid"] === tid);
+const isHid = (e) => Object.keys(e.attrs).some((k) => k.startsWith("data-amz-hide-"));
+await t("v4.3.0 top bar: hidden items collapse their pure wrapper chain; neighbours and the shared rows stay; fully reverts", () => {
+  const p = makePage(topBarDom, { pathname: "/home" }); run(p.w, true, true, true, false); const api = p.w.__amzHideSections;
+  // audible: wrapper div around the tab is hidden (otherwise an empty flex item costs two extra gaps)
+  assert.ok(isHid(byTid(p, "audibleWrap"))); assert.ok(isHid(byTid(p, "TopNavBar_AudiobooksTab")));
+  assert.ok(byTid(p, "audibleWrap").hasAttribute(AA));
+  // podcasts: direct child of the row, only the tab itself
+  assert.ok(byTid(p, "TopNavBar_PodcastTab").hasAttribute(A));
+  // getApp: whole single-child chain up to (excluding) the shared right row
+  ["getAppWrap", "getAppInner", "getAppOuter", "Button,GetAppButton"].forEach((t) => assert.ok(byTid(p, t).hasAttribute("data-amz-hide-getApp"), t));
+  // never the shared rows or the neighbours
+  ["navrow", "rightRow", "pillRow", "TopNavBar_HomeTab", "TopNavBar_MusicTab", "TopNavBar_LibraryTab", "OverflowMenu_Menu"].forEach((t) => assert.ok(!isHid(byTid(p, t)), t + " stays"));
+  assert.ok(!p.html.querySelectorAll("a").some(isHid) && !p.html.querySelectorAll("header").some(isHid));
+  // spacer case: pill item (wrapper + empty spacer sibling) hidden as a whole for podcast pills, audiobook pill by audible; others stay
+  ["podcast", "podcastEpisode"].forEach((k) => { assert.ok(byTid(p, "pillItem_" + k).hasAttribute(A), k); assert.ok(byTid(p, "spacer_" + k)); });
+  assert.ok(byTid(p, "pillItem_audiobook").hasAttribute(AA));
+  ["album", "artist", "song"].forEach((k) => assert.ok(!isHid(byTid(p, "pillItem_" + k)), k));
+  // toggle off one section: only its marks go (wrapper included); the rest stay
+  api.setEnabled("audible", false);
+  assert.ok(!isHid(byTid(p, "audibleWrap"))); assert.ok(!isHid(byTid(p, "TopNavBar_AudiobooksTab"))); assert.ok(!isHid(byTid(p, "pillItem_audiobook")));
+  assert.ok(byTid(p, "TopNavBar_PodcastTab").hasAttribute(A)); assert.ok(byTid(p, "getAppOuter").hasAttribute("data-amz-hide-getApp"));
+  api.setEnabled("podcasts", false); api.setEnabled("getApp", false);
+  assert.equal(p.html.querySelectorAll("*").filter(isHid).length, 0); assert.equal(p.doc.getElementById("amz-hide-sections-style"), null);
+});
+await t("v4.3.0 top bar: wrapper climb never crosses real siblings, protected UI, or the search box", () => {
+  const dom = () => new El("div", { id: "root" }, [
+    new El("nav", {}, [
+      new El("div", { "data-testid": "w1" }, [new El("div", { "data-testid": "w2" }, [new El("button", { "data-testid": "TopNavBar_PodcastTab" }), new El("span", {}, [], "real sibling")])]),
+      new El("div", { "data-testid": "w3" }, [new El("input", {}), new El("button", { "data-testid": "Button,GetAppButton", "aria-label": "Get App" })]),
+      new El("div", { "data-testid": "w4" }, [new El("div", { "data-testid": "NowPlayingBar" }, [new El("audio", {})]), new El("button", { "aria-label": "Download app" })]),
+    ]),
+  ]);
+  const p = makePage(dom); run(p.w, true, false, true, false);
+  assert.ok(byTid(p, "TopNavBar_PodcastTab").hasAttribute(A)); assert.ok(!isHid(byTid(p, "w2")) && !isHid(byTid(p, "w1")));
+  assert.ok(byTid(p, "Button,GetAppButton").hasAttribute("data-amz-hide-getApp")); assert.ok(!isHid(byTid(p, "w3")));
+  assert.ok(!isHid(byTid(p, "w4")) && !isHid(byTid(p, "NowPlayingBar")));
+});
+
 // ---- v4.2.0 performance: shared heading index / memo / skip-irrelevant-mutations ----
 function bigDom() {
   const h = (t) => new El("h1", { role: "heading", "aria-label": t }, [new El("h4", { role: "heading" }, [], t)]);
@@ -392,7 +455,7 @@ await t("v4.2.0: large-DOM scan hides expected items with bounded querySelectorA
   assert.ok(shelves[7].querySelectorAll('[data-testid="CarouselItem"]')[0].hasAttribute(A), "podcast-link card hidden");
   assert.ok(p.html.querySelectorAll("button").every((b) => b.hasAttribute("data-amz-hide-audible") || b.hasAttribute("data-amz-hide-getApp")));
   assert.ok(n < 3000, "too many querySelectorAll calls: " + n);
-  assert.equal(p.w.__amzHideSections.version, "4.2.0");
+  assert.equal(p.w.__amzHideSections.version, "4.3.0");
 });
 await t("v4.2.0: mutations only inside hidden subtrees / own style / player are ignored; others still scan", async () => {
   const p = makePage(homeDom); run(p.w, true);

@@ -4,7 +4,7 @@
 // DOM findings behind these selectors: docs/PODCASTS.md.
 (function () {
   "use strict";
-  const HIDE_SECTIONS_VERSION = "4.2.0";
+  const HIDE_SECTIONS_VERSION = "4.3.0";
 
   // The ONLY place DOM knowledge lives. Prefer data-testid / href / aria-label over class names
   // (classes are hashed react-native-web atoms and change between builds).
@@ -137,6 +137,30 @@
       el.setAttribute(attrOf(id), "1");
     });
   }
+  // A fixed-width/margin spacer: an empty div/span (no element children, no text). Search filter pills come as [pill wrapper, 12px spacer].
+  function isSpacer(n) {
+    return safe(() => (n.tagName === "DIV" || n.tagName === "SPAN") && n.children.length === 0 && !String(n.textContent || "").trim(), false);
+  }
+  function onlySpacerSiblings(p, cur) {
+    return Array.prototype.every.call(p.children, (k) => k === cur || isSpacer(k));
+  }
+  // Nav / header / filter controls sit in flex rows with a `gap`, often inside a pure wrapper div (one element child, or only empty spacer divs besides it). Hiding only the
+  // control leaves the empty wrapper as a zero-width flex item, which still costs one extra gap on each side (docs/PODCASTS.md).
+  // So the control and its wrapper chain are hidden together: climb while the parent has exactly this one element child, never past
+  // the shared row (which has other real children), a never-hide element, or anything protected / holding the search box.
+  function markControl(el, id) {
+    safe(() => {
+      mark(el, id);
+      if (!el.matches(RULES.controlSelector)) return;
+      let cur = el;
+      for (let i = 0; i < RULES.maxClimb; i++) {
+        const p = cur.parentElement;
+        if (!p || isNever(p) || !onlySpacerSiblings(p, cur) || hasStopChild(p) || isProtected(p)) break;
+        cur = p;
+      }
+      if (cur !== el) mark(cur, id);
+    });
+  }
 
   function cardTarget(el) {
     return safe(() => {
@@ -208,7 +232,7 @@
         }
         const labelHit = sec.controlLabelRx && c.texts.some((t) => sec.controlLabelRx.test(t));
         const hrefHit = sec.controlHrefRx && c.href && sec.controlHrefRx.test(c.href);
-        if (labelHit || hrefHit) mark(c.el, id);
+        if (labelHit || hrefHit) markControl(c.el, id);
       });
     });
   }
@@ -233,7 +257,7 @@
     all(document, "[" + attr + "]").forEach((el) => {
       if (isProtected(el)) safe(() => el.removeAttribute(attr));
     });
-    sec.direct.forEach((s) => all(document, s).forEach((el) => mark(el, id)));
+    sec.direct.forEach((s) => all(document, s).forEach((el) => markControl(el, id)));
     scanControls(id, sec);
     if (onKeepContentPage(sec)) return;
     sec.contentDirect.forEach((s) => all(document, s).forEach((el) => mark(el, id)));
