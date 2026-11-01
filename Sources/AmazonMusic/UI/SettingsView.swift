@@ -9,11 +9,16 @@ enum SettingsTab: String, CaseIterable, Hashable {
 struct SettingsView: View {
     @State private var tab: SettingsTab
 
-    init(tab: SettingsTab = .general) { _tab = State(initialValue: tab) }
+    private let loginItem: any LoginItemService
+
+    init(tab: SettingsTab = .general, loginItem: any LoginItemService = SystemLoginItem()) {
+        _tab = State(initialValue: tab)
+        self.loginItem = loginItem
+    }
 
     var body: some View {
         TabView(selection: $tab) {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
+            GeneralSettings(loginItem: loginItem).tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
             NotificationSettings().tabItem { Label("Notifications", systemImage: "bell") }.tag(SettingsTab.notifications)
             AdvancedSettings().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag(SettingsTab.advanced)
         }
@@ -25,11 +30,32 @@ private struct GeneralSettings: View {
     @Environment(AppSettings.self) private var settings
     @State private var draft = ""
     @State private var error: String?
+    @State private var loginStatus: LoginItemStatus
+    @State private var loginError: String?
+    private let loginItem: any LoginItemService
     private static let custom = "custom"
+
+    init(loginItem: any LoginItemService) {
+        self.loginItem = loginItem
+        _loginStatus = State(initialValue: loginItem.status)
+    }
 
     var body: some View {
         @Bindable var settings = settings
+        let login = LoginItemPresentation(loginStatus)
         Form {
+            Toggle("Open at login", isOn: Binding(
+                get: { login.isOn },
+                set: { setLogin($0) }))
+                .disabled(!login.canToggle)
+            if let loginError {
+                Text(loginError).font(.caption).foregroundStyle(.red)
+            } else if let c = login.caption {
+                Text(c).font(.caption).foregroundStyle(.secondary)
+            }
+            if login.needsApproval {
+                Button("Open Login Items Settings") { SystemLoginItem.openSystemSettings() }
+            }
             Toggle("Show menu bar icon", isOn: $settings.showMenuBar)
             Toggle("Hide podcasts", isOn: $settings.hidePodcasts)
             Toggle("Hide Audible", isOn: $settings.hideAudible)
@@ -54,8 +80,18 @@ private struct GeneralSettings: View {
             Text("Changing the start URL loads it immediately.").font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
-        .onAppear { draft = settings.startURL }
+        .onAppear { draft = settings.startURL; loginStatus = loginItem.status }
         .onChange(of: settings.startURL) { _, new in if error == nil { draft = new } }
+    }
+
+    private func setLogin(_ on: Bool) {
+        do {
+            if on { try loginItem.register() } else { try loginItem.unregister() }
+            loginError = nil
+        } catch {
+            loginError = error.localizedDescription // toggle reverts: state is re-read below
+        }
+        loginStatus = loginItem.status
     }
 
     private func commit(_ input: String) {

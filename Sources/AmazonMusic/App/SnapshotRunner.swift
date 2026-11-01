@@ -51,7 +51,7 @@ enum SnapshotRunner {
         let (ps, pb) = PlayerStateFixtures.playing.make()
         for tab in SettingsTab.allCases {
             emit("settings-\(tab.rawValue)", nil, chrome: true) { _ in
-                NSHostingView(rootView: SettingsView(tab: tab)
+                NSHostingView(rootView: SettingsView(tab: tab, loginItem: FakeLoginItem(status: .disabled))
                     .environment(settings).environment(web).environment(ps).environment(pb).environment(notifications))
             }
         }
