@@ -13,3 +13,5 @@
 - `scripts/snapshot.sh --baseline` writes `build/snapshots/baseline`; `scripts/snapshot.sh --diff` re-renders into `build/snapshots/current/` and prints changed pixels per file (`magick compare -metric AE -fuzz 8%`), exit 1 on any difference/missing file unless `--allow-diff`; exit 2 if ImageMagick is missing (`brew install imagemagick`).
 - Tests: see commands above.
 - Caveat: snapshots use fixtures only (fixed, dated data); never real network data, so diffs reflect UI changes only.
+
+Design rules: `design/DESIGN-SYSTEM.md`. Use its tokens; never raw opacities, radii, or durations. `tools/grid-lint.sh` checks spacing.

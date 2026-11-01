@@ -22,7 +22,7 @@ struct SettingsView: View {
             NotificationSettings().tabItem { Label("Notifications", systemImage: "bell") }.tag(SettingsTab.notifications)
             AdvancedSettings().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag(SettingsTab.advanced)
         }
-        .frame(width: 480, height: 340)
+        .noInitialFocus()
     }
 }
 
@@ -80,6 +80,7 @@ private struct GeneralSettings: View {
             Text("Changing the start URL loads it immediately.").font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
+        .fitsContent()
         .onAppear { draft = settings.startURL; loginStatus = loginItem.status }
         .onChange(of: settings.startURL) { _, new in if error == nil { draft = new } }
     }
@@ -128,6 +129,7 @@ private struct NotificationSettings: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
+        .fitsContent()
         .task { await notifications.refreshStatus() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await notifications.refreshStatus() }
@@ -176,6 +178,7 @@ private struct AdvancedSettings: View {
             }
         }
         .formStyle(.grouped)
+        .fitsContent()
         .onAppear { uaDraft = settings.customUserAgent ?? "" }
         .confirmationDialog("Reset website data?", isPresented: $confirmReset) {
             Button("Reset and Sign Out", role: .destructive) { Task { await web.resetWebsiteData() } }
@@ -188,5 +191,47 @@ private struct AdvancedSettings: View {
     private func applyUA() {
         let t = uaDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.customUserAgent = t.isEmpty ? nil : t // WebController observes and applies + reloads
+    }
+}
+
+enum SettingsLayout {
+    static let width: CGFloat = 480
+}
+
+extension View {
+    /// Grouped Forms scroll and report no height. Turn scrolling off and take the ideal height so the
+    /// window (`.windowResizability(.contentSize)`) is as tall as the tab's content.
+    func fitsContent() -> some View {
+        scrollDisabled(true)
+            .frame(width: SettingsLayout.width)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Opens with no control focused: clears the first responder the window picked on open.
+    func noInitialFocus() -> some View {
+        modifier(NoInitialFocus())
+    }
+}
+
+private struct NoInitialFocus: ViewModifier {
+    func body(content: Content) -> some View {
+        content.background(WindowResponderClearer())
+    }
+}
+
+/// Resigns the first responder once the view is in a window (and again after the first layout pass).
+private struct WindowResponderClearer: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { ClearerView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ClearerView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            for delay in [0.0, 0.15] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.window?.makeFirstResponder(nil)
+                }
+            }
+        }
     }
 }

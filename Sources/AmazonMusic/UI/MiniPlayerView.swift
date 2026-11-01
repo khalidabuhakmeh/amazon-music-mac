@@ -11,12 +11,12 @@ struct MiniPlayerView: View {
     @Environment(PlayerBridge.self) private var bridge
 
     static let width: CGFloat = 340
-    private static let padding: CGFloat = 14
+    private static let padding: CGFloat = Space.l
 
     var body: some View {
         let track = player.popoverMode == .track ? player.track : nil
         VStack(spacing: 0) {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .center, spacing: Space.m) {
             VStack(alignment: .leading, spacing: 0) {
                 if let track {
                     MiniTitleBlock(track: track)
@@ -28,8 +28,8 @@ struct MiniPlayerView: View {
                     MiniProgress(track: track)
                 } else {
                     Button("Open Amazon Music") { MainWindowCoordinator.shared.open() }
-                        .buttonStyle(.link).font(.system(size: 12))
-                        .frame(maxWidth: .infinity, minHeight: 14, alignment: .leading)
+                        .buttonStyle(.link).font(.callout)
+                        .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                 }
                 Spacer(minLength: 4)
                 controls(enabled: track != nil)
@@ -51,7 +51,7 @@ struct MiniPlayerView: View {
             // MenuBarExtra's own material is very translucent; add an opaque-ish layer so text behind doesn't bleed through.
             ZStack {
                 Rectangle().fill(.thickMaterial)
-                Color(nsColor: .windowBackgroundColor).opacity(0.7)
+                Color(nsColor: .windowBackgroundColor).opacity(Surface.dim)
             }
             .ignoresSafeArea()
         }
@@ -63,18 +63,18 @@ struct MiniPlayerView: View {
         let shuffled = player.isShuffled
         let mode = player.repeatMode
         return HStack(spacing: 0) {
-            ControlSlot(symbol: mode == .one ? "repeat.1" : "repeat", size: 14,
+            ControlSlot(symbol: mode == .one ? "repeat.1" : "repeat", size: Glyph.control,
                         tint: Self.toggleTint(on: mode.map { $0 != .off }), isOn: mode.map { $0 != .off } == true,
                         label: "Repeat", value: Self.repeatValue(mode), help: Self.repeatHelp(mode),
                         enabled: enabled && mode != nil) { Task { await bridge.cycleRepeat() } }
-            ControlSlot(symbol: "backward.end.fill", size: 16, label: "Previous track", help: "Previous track",
+            ControlSlot(symbol: "backward.end.fill", size: Glyph.skip, label: "Previous track", help: "Previous track",
                         enabled: enabled) { Task { await bridge.send(.previous) } }
-            ControlSlot(symbol: player.isPlaying ? "pause.fill" : "play.fill", size: 20,
+            ControlSlot(symbol: player.isPlaying ? "pause.fill" : "play.fill", size: Glyph.play,
                         label: player.isPlaying ? "Pause" : "Play", help: player.isPlaying ? "Pause" : "Play",
                         enabled: enabled) { Task { await bridge.send(.toggle) } }
-            ControlSlot(symbol: "forward.end.fill", size: 16, label: "Next track", help: "Next track",
+            ControlSlot(symbol: "forward.end.fill", size: Glyph.skip, label: "Next track", help: "Next track",
                         enabled: enabled) { Task { await bridge.send(.next) } }
-            ControlSlot(symbol: "shuffle", size: 14, tint: Self.toggleTint(on: shuffled), isOn: shuffled == true,
+            ControlSlot(symbol: "shuffle", size: Glyph.control, tint: Self.toggleTint(on: shuffled), isOn: shuffled == true,
                         label: "Shuffle", value: shuffled.map { $0 ? "On" : "Off" },
                         help: shuffled == true ? "Shuffle: on (click to turn off)" : "Shuffle: off (click to turn on)",
                         enabled: enabled && shuffled != nil) { Task { await bridge.toggleShuffle() } }
@@ -83,7 +83,7 @@ struct MiniPlayerView: View {
     }
 
     /// On = accent at full opacity; off = primary at ~62%; unknown/disabled is dimmed further by ControlSlot.
-    private static func toggleTint(on: Bool?) -> Color { on == true ? .accentColor : Color.primary.opacity(0.62) }
+    private static func toggleTint(on: Bool?) -> Color { on == true ? .accentColor : Color.primary.opacity(Surface.secondaryText) }
     private static func repeatValue(_ m: RepeatMode?) -> String? { m.map { ["off": "Off", "all": "All", "one": "One"][$0.rawValue] ?? "" } }
     private static func repeatHelp(_ m: RepeatMode?) -> String {
         switch m {
@@ -124,7 +124,7 @@ private struct UpNextSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.6)
+            Divider().opacity(Surface.secondaryText)
             if expanded {
                 header
                 ScrollView {
@@ -136,13 +136,13 @@ private struct UpNextSection: View {
                     }
                 }
                 .frame(height: min(CGFloat(min(items.count, 10)) * Self.rowHeight, Self.rowHeight * Self.maxVisibleRows))
-                .padding(.bottom, 6)
+                .padding(.bottom, Space.s)
             } else if let first = items.first {
                 // Collapsed: a preview of the next song; the whole row (song + chevron) only expands the list.
                 Button { toggle() } label: {
                     HStack(spacing: 0) {
                         UpNextRow(item: first, showsLabel: true)
-                        chevron.frame(width: 42, height: 44)
+                        chevron.frame(width: 44, height: 44)
                     }
                     .frame(height: 44)
                     .contentShape(Rectangle())
@@ -159,11 +159,11 @@ private struct UpNextSection: View {
     private var header: some View {
         Button { toggle() } label: {
             HStack {
-                Text("Up Next").font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary.opacity(0.65))
+                Text("Up Next").font(.callout.weight(.semibold)).foregroundStyle(.primary.opacity(Surface.secondaryText))
                 Spacer()
                 chevron
             }
-            .padding(.horizontal, 14).frame(height: 30).contentShape(Rectangle())
+            .padding(.horizontal, Space.l).frame(height: 32).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Hide upcoming songs")
@@ -174,10 +174,10 @@ private struct UpNextSection: View {
 
     private var chevron: some View {
         Image(systemName: expanded ? "chevron.down" : "chevron.right")
-            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.primary.opacity(0.6))
+            .font(Glyph.small).foregroundStyle(.primary.opacity(Surface.secondaryText))
     }
 
-    private func toggle() { withAnimation(.easeInOut(duration: 0.18)) { storedExpanded.toggle() } }
+    private func toggle() { withAnimation(Motion.standard) { storedExpanded.toggle() } }
 }
 
 /// One upcoming song. When `playable` (expanded list), the whole row is a button that plays it (hover highlight + play icon
@@ -193,45 +193,45 @@ private struct UpNextRow: View {
     @State private var hovering = false
 
     var body: some View {
-        let content = HStack(spacing: 10) {
+        let content = HStack(spacing: Space.m) {
             ZStack {
                 Group {
                     if let image { Image(nsImage: image).resizable().scaledToFill() }
-                    else { ZStack { Rectangle().fill(.quaternary); Image(systemName: "music.note").font(.system(size: 11)).foregroundStyle(.secondary) } }
+                    else { ZStack { Rectangle().fill(.quaternary); Image(systemName: "music.note").font(.caption).foregroundStyle(.secondary) } }
                 }
                 // Hover/pending feedback lives on the artwork (like Music.app), not as a trailing glyph next to the chevron.
                 if pending {
-                    Rectangle().fill(.black.opacity(0.5))
+                    Rectangle().fill(.black.opacity(Surface.scrim))
                     ProgressView().controlSize(.mini).tint(.white)
                 } else if playable && hovering {
-                    Rectangle().fill(.black.opacity(0.45))
-                    Image(systemName: "play.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                    Rectangle().fill(.black.opacity(Surface.scrim))
+                    Image(systemName: "play.fill").font(Glyph.small).foregroundStyle(.white)
                 }
             }
             .frame(width: 28, height: 28)
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous).strokeBorder(.primary.opacity(Surface.hairline), lineWidth: 0.5)) // grid: ok hairline border
             VStack(alignment: .leading, spacing: 1) {
-                Text(item.title).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
+                Text(item.title).font(.callout.weight(.medium)).lineLimit(1).truncationMode(.tail)
                 if let artist = item.artist {
-                    Text(artist).font(.system(size: 11)).foregroundStyle(.primary.opacity(0.65)).lineLimit(1).truncationMode(.tail)
+                    Text(artist).font(.caption).foregroundStyle(.primary.opacity(Surface.secondaryText)).lineLimit(1).truncationMode(.tail)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         // Collapsed: artwork aligns with the title column above (14pt), chevron button supplies the trailing edge.
-        .padding(.leading, 14)
-        .padding(.trailing, showsLabel ? 0 : 14)
+        .padding(.leading, Space.l)
+        .padding(.trailing, showsLabel ? 0 : Space.l)
         .frame(maxHeight: .infinity)
         .background {
             // Expanded list rows get a subtle inset highlight; the collapsed row relies on the artwork overlay only.
             if !showsLabel {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(playable && hovering && !pending ? 0.07 : 0))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
+                RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+                    .fill(Color.primary.opacity(playable && hovering && !pending ? Surface.hoverFill : 0))
+                    .padding(.horizontal, Space.s).padding(.vertical, Space.xxs)
             }
         }
-        .opacity(pending ? 0.7 : 1)
+        .opacity(pending ? Surface.dim : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .task(id: item.artworkURL) {
@@ -256,7 +256,7 @@ private struct UpNextRow: View {
 /// A fixed-size hit target that shares the row width equally with its siblings.
 private struct ControlSlot: View {
     let symbol: String
-    let size: CGFloat
+    let size: Font
     var tint: Color = .primary
     var isOn = false
     let label: String
@@ -268,9 +268,9 @@ private struct ControlSlot: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: size, weight: .semibold))
+                .font(size)
                 .foregroundStyle(tint)
-                .frame(maxWidth: .infinity, minHeight: 30)
+                .frame(maxWidth: .infinity, minHeight: 32)
                 .overlay(alignment: .bottom) {
                     // State indicator that doesn't rely on colour alone.
                     Circle().fill(Color.accentColor).frame(width: 4, height: 4).opacity(isOn ? 1 : 0)
@@ -279,7 +279,7 @@ private struct ControlSlot: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.3)
+        .opacity(enabled ? 1 : Surface.faint)
         .help(help)
         .accessibilityLabel(label)
         .accessibilityValue(value ?? "")
@@ -296,18 +296,18 @@ private struct LikeBadge: View {
     var body: some View {
         Button { Task { await bridge.toggleLike() } } label: {
             Image(systemName: liked ? "heart.fill" : "heart")
-                .font(.system(size: 14, weight: .semibold))
+                .font(Glyph.control)
                 .foregroundStyle(liked ? Color.red : Color.white)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(.black.opacity(0.5)))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(.black.opacity(Surface.scrim)))
                 .background(Circle().fill(.ultraThinMaterial))
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                .shadow(color: .black.opacity(Surface.faint), radius: 3, y: 1)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(liked || hovering ? 1 : 0.7)
-        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .opacity(liked || hovering ? 1 : Surface.dim)
+        .animation(Motion.quick, value: hovering)
         .help(liked ? "Unlike" : "Like")
         .accessibilityLabel(liked ? "Unlike" : "Like")
         .accessibilityValue(liked ? "Liked" : "Not liked")
@@ -327,19 +327,19 @@ private struct SimilarBadge: View {
         Button { Task { await bridge.playSimilar() } } label: {
             Group {
                 if busy { ProgressView().controlSize(.small).tint(.white).colorScheme(.dark) }
-                else { Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.white) }
+                else { Image(systemName: "dot.radiowaves.left.and.right").font(Glyph.control).foregroundStyle(Color.white) }
             }
-            .frame(width: 30, height: 30)
-            .background(Circle().fill(.black.opacity(0.5)))
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(.black.opacity(Surface.scrim)))
             .background(Circle().fill(.ultraThinMaterial))
-            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+            .shadow(color: .black.opacity(Surface.faint), radius: 3, y: 1)
             .frame(width: 36, height: 36)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(busy)
-        .opacity(busy || hovering ? 1 : 0.7)
-        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .opacity(busy || hovering ? 1 : Surface.dim)
+        .animation(Motion.quick, value: hovering)
         .help("Play Similar Music")
         .accessibilityLabel("Play Similar Music")
         .accessibilityValue(busy ? "Starting" : "")
@@ -359,14 +359,14 @@ private struct CoverView: View {
             } else {
                 ZStack {
                     Rectangle().fill(.quaternary)
-                    Image(systemName: "music.note").font(.system(size: 30)).foregroundStyle(.secondary)
+                    Image(systemName: "music.note").font(Glyph.placeholder).foregroundStyle(.secondary)
                 }
             }
         }
         .frame(width: Self.size, height: Self.size)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.22), radius: 5, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.m, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).strokeBorder(.primary.opacity(Surface.hairline), lineWidth: 0.5)) // grid: ok hairline border
+        .shadow(color: .black.opacity(Surface.faint), radius: 5, y: 2)
         .accessibilityHidden(true)
     }
 }
@@ -387,13 +387,13 @@ private struct CoverArt: View {
             .overlay(alignment: .bottomTrailing) {
                 if let liked {
                     LikeBadge(liked: liked, hovering: hovering || forceHover)
-                        .padding(.trailing, 3).padding(.bottom, 3)
+                        .padding(.trailing, Space.xs).padding(.bottom, Space.xs)
                 }
             }
             .overlay(alignment: .topLeading) {
                 if track != nil, player.canPlaySimilar {
                     SimilarBadge(hovering: hovering || forceHover)
-                        .padding(.leading, 3).padding(.top, 3)
+                        .padding(.leading, Space.xs).padding(.top, Space.xs)
                 }
             }
             .onHover { hovering = $0 }
@@ -413,9 +413,9 @@ private struct MiniPlaceholderText: View {
     var signedOut = false
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Nothing playing").font(.system(size: 19, weight: .semibold))
+            Text("Nothing playing").font(.title3.weight(.semibold))
                 .lineLimit(2)
-            Text(signedOut ? "Open the main window to sign in" : "Pick something to play in Amazon Music").font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
+            Text(signedOut ? "Open the main window to sign in" : "Pick something to play in Amazon Music").font(.body).foregroundStyle(.primary.opacity(Surface.secondaryText))
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -429,11 +429,11 @@ private struct MiniTitleBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(track.title ?? "Unknown title")
-                .font(.system(size: 19, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .lineLimit(2).truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
             Text(track.artist ?? "")
-                .font(.system(size: 14)).foregroundStyle(.primary.opacity(0.65))
+                .font(.body).foregroundStyle(.primary.opacity(Surface.secondaryText))
                 .lineLimit(1).truncationMode(.tail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -453,13 +453,13 @@ private struct MiniProgress: View {
         let duration = max(track.duration ?? 0, 0)
         TimelineView(.animation(minimumInterval: 0.5, paused: !player.isPlaying || scrub != nil)) { ctx in
             let pos = min(scrub ?? player.interpolatedPosition(at: ctx.date), duration > 0 ? duration : .infinity)
-            HStack(spacing: 6) {
+            HStack(spacing: Space.s) {
                 Text(Self.format(pos)).frame(minWidth: 28, alignment: .leading)
                 bar(pos: pos, duration: duration)
                 Text(duration > 0 ? "-" + Self.format(max(0, duration - pos)) : "--:--")
                     .frame(minWidth: 28, alignment: .trailing)
             }
-            .font(.system(size: 10).monospacedDigit()).foregroundStyle(.primary.opacity(0.7))
+            .font(.caption2.monospacedDigit()).foregroundStyle(.primary.opacity(Surface.secondaryText))
         }
     }
 
@@ -468,11 +468,11 @@ private struct MiniProgress: View {
             let w = max(geo.size.width, 1)
             let frac = duration > 0 ? CGFloat(min(max(pos / duration, 0), 1)) : 0
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.3)).frame(height: 6)
-                Capsule().fill(Color.primary).frame(width: w * frac, height: 6)
+                Capsule().fill(Color.primary.opacity(Surface.faint)).frame(height: 8)
+                Capsule().fill(Color.primary).frame(width: w * frac, height: 8)
                 Circle().fill(Color.primary).frame(width: 12, height: 12)
-                    .shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5)
-                    .offset(x: min(max(w * frac - 6, 0), w - 12))
+                    .shadow(color: .black.opacity(Surface.faint), radius: 1.5, y: 0.5)
+                    .offset(x: min(max(w * frac - 6, 0), w - 12)) // grid: ok scrub knob follows drag position
                     .opacity(barHover || scrub != nil ? 1 : 0)
             }
             .onHover { barHover = $0 }
@@ -490,7 +490,7 @@ private struct MiniProgress: View {
                     Task { await bridge.send(.seek(v)); scrub = nil }
                 })
         }
-        .frame(height: 14)
+        .frame(height: 16)
         .disabled(duration <= 0)
         .accessibilityElement()
         .accessibilityLabel("Playback position")

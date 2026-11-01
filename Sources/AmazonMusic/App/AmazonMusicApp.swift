@@ -70,5 +70,6 @@ struct AmazonMusicApp: App {
                 .environment(bridge)
                 .environment(notifications)
         }
+        .windowResizability(.contentSize)
     }
 }

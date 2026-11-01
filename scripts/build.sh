@@ -17,6 +17,7 @@ xcodebuild -scheme AmazonMusic -configuration "${CONFIG:-Debug}" -destination 'p
 APP="build/Build/Products/${CONFIG:-Debug}/AmazonMusic.app"
 if [ "$SELFTEST" = 1 ]; then
   "$APP/Contents/MacOS/AmazonMusic" --selftest
+  tools/grid-lint.sh
 fi
 if [ "$OPEN" = 1 ]; then
   mkdir -p ~/Applications
