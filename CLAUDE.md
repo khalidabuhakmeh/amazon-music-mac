@@ -10,6 +10,6 @@
 
 ## Scripts
 - `scripts/build.sh` — build only. `--open` also installs to `~/Applications/AmazonMusic.app` (file name must stay; display name comes from InfoPlist.strings), kills and relaunches it. `--selftest` builds then runs the binary's `--selftest`.
-- `scripts/snapshot.sh --baseline` writes `build/snapshots/baseline`; `scripts/snapshot.sh --diff` re-renders into `build/snapshots/` and prints changed pixels per file (`magick compare -metric AE -fuzz 8%`), exit 1 on any difference/missing file unless `--allow-diff`; exit 2 if ImageMagick is missing (`brew install imagemagick`).
+- `scripts/snapshot.sh --baseline` writes `build/snapshots/baseline`; `scripts/snapshot.sh --diff` re-renders into `build/snapshots/current/` and prints changed pixels per file (`magick compare -metric AE -fuzz 8%`), exit 1 on any difference/missing file unless `--allow-diff`; exit 2 if ImageMagick is missing (`brew install imagemagick`).
 - Tests: see commands above.
 - Caveat: snapshots use fixtures only (fixed, dated data); never real network data, so diffs reflect UI changes only.

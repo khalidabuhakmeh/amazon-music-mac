@@ -8,9 +8,9 @@ for a in "$@"; do case "$a" in
 if [ "$MODE" = diff ] && ! command -v magick >/dev/null; then
   echo "magick not found. Install: brew install imagemagick"; exit 2
 fi
-case "$MODE" in baseline) OUT=build/snapshots/baseline;; *) OUT="${OUT:-build/snapshots}";; esac
+case "$MODE" in baseline) OUT=build/snapshots/baseline;; diff) OUT="${OUT:-build/snapshots/current}";; *) OUT="${OUT:-build/snapshots}";; esac
 ./scripts/build.sh >/dev/null
-rm -rf "$OUT"; mkdir -p "$OUT"
+mkdir -p "$OUT"; rm -f "$OUT"/*.png
 "build/Build/Products/${CONFIG:-Debug}/AmazonMusic.app/Contents/MacOS/AmazonMusic" --snapshot "$OUT"
 [ "$MODE" = diff ] || exit 0
 BASE=build/snapshots/baseline; bad=0
