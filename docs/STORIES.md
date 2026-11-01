@@ -179,10 +179,10 @@ As the user, I pick Default, Light, Synthwave, Cyberpunk or Vampire in Settings.
 Screens: settings
 Acceptance:
 - [x] [unit] Theme CSS and attribute selectors generated (ThemeTests; docs/THEMES.md).
-- [ ] [manual] Cyberpunk live screenshots and fixes (yellow player edge) re-viewed on an unlocked screen.
-- [ ] [manual] Synthwave fill alpha re-viewed; Settings picker live switching driven.
-- [ ] [manual] light-nowplaying.png refreshed.
-Status: doing
+- [x] [manual] Cyberpunk live screenshots and fixes (yellow player edge) re-viewed on an unlocked screen.
+- [x] [manual] Synthwave fill alpha re-viewed; Settings picker live switching driven (all five themes, no reload).
+- [x] [manual] light-nowplaying.png refreshed.
+Status: done
 
 ### S-022 See a consistent, spaced top bar
 As the user, the top bar has no overlap or cramped spacing.

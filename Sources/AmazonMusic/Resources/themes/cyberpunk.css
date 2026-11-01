@@ -79,7 +79,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, [role="button"]:focu
 [role="menu"], [role="dialog"], [role="listbox"], [role="tooltip"], input, button:not([style*="border-radius: 9999px"]) { border-radius: 2px !important; }
 [style*="border-color: rgba(255, 255, 255, 0.15)"][style*="border-radius"]:not([data-testid*="Thumbnail"]):not([data-testid*="Tile"]) { border-radius: 3px !important; border-color: rgba(0,240,255,.5) !important; }
 [style*="background-color: rgba(255, 255, 255, 0.15)"][style*="border-radius: 9999px"] { border-radius: 3px !important; }
-[data-testid*="MiniPlayer"] { box-shadow: inset 0 1px 0 rgba(252,238,9,.45) !important; }
+[data-testid*="MiniPlayer"]:not([data-testid*="_"]) { box-shadow: inset 0 1px 0 rgba(252,238,9,.45) !important; }
 /* text ON artwork stays light (must stay last) */
 [data-testid*="ThumbnailButton"] [style*="color:"], [data-testid*="TopRecommender"] [style*="color:"],
 [data-testid*="TopRecommender"] [style*="color:"] * { color: #ffffff !important; }

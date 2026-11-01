@@ -77,7 +77,7 @@ input { --placeholderTextColor: #b9a7e0 !important; }
 button:focus-visible, a:focus-visible, input:focus-visible, [role="button"]:focus-visible, [role="link"]:focus-visible, [role="slider"]:focus-visible { outline: 2px solid var(--amz-acc) !important; outline-offset: 2px; }
 [tabindex="-1"]:focus, [tabindex="-1"]:focus-visible, h1:focus-visible, h2:focus-visible, h3:focus-visible { outline: none !important; }
 [style^="color: rgb(37, 209, 218)"], [style*="; color: rgb(37, 209, 218)"] { text-shadow: 0 0 8px rgba(45,226,230,.55); }
-[data-testid*="MiniPlayer"], [data-testid*="Player"][style*="background-color"] { box-shadow: 0 -2px 22px rgba(255,43,214,.25) !important; }
+[data-testid*="MiniPlayer"]:not([data-testid*="_"]), [data-testid*="Player"]:not([data-testid*="_"])[style*="background-color"] { box-shadow: 0 -2px 22px rgba(255,43,214,.25) !important; }
 /* text ON artwork stays light (must stay last) */
 [data-testid*="ThumbnailButton"] [style*="color:"], [data-testid*="TopRecommender"] [style*="color:"],
 [data-testid*="TopRecommender"] [style*="color:"] * { color: #ffffff !important; }

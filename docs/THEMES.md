@@ -37,7 +37,7 @@ Picker order: Default, Light, Synthwave, Cyberpunk, Vampire. All three set `colo
 They re-map: page/top-bar/chrome backgrounds, primary/secondary/dim text, accent text + icons (`rgb(37,209,218)`), accent *fills*
 (inline `background-color: rgb(37,209,218)` **and** the CSS-module primary button `button[class*="_accent"][class*="_filled"]`; label color
 is forced to the "on-fill" color), hairlines/secondary fills, the progress fill (gradient), the detail-page `LinearGradient` fade (fades to the page color), menus/dialogs, scrollbars, selection and focus rings.
-Artwork is never filtered; text on artwork stays white (last block). Cyberpunk additionally uses 2–3px radii on buttons/inputs/menus (never on artwork tiles) and a thin yellow edge on the player bar.
+Artwork is never filtered; text on artwork stays white (last block). Cyberpunk additionally uses 2–3px radii on buttons/inputs/menus (never on artwork tiles) and a thin yellow edge on the player bar (only the bar container is matched, `:not([data-testid*="_"])`; matching `MiniPlayer_*` children produced yellow fragments over the buttons).
 
 | Theme | page | surface (top bar, menus) | text / secondary | accent text | accent fill (label) | glow / lines |
 |---|---|---|---|---|---|---|
@@ -55,7 +55,7 @@ WCAG contrast (computed from the hex values, sRGB relative luminance; all ≥ 4.
 
 Glow is `box-shadow` / one `text-shadow` on accent text only (Synthwave, 8px, same hue) so it never sits behind body text.
 CSS-module class names (`_accent`, `_filled`) have a build hash prefix; selectors use `[class*=…]` substrings, so a hash change is harmless but a rename of those words would need a CSS fix.
-Screenshots: `docs/screenshots/themes/{synthwave,vampire}-*.png` (cyberpunk screenshots were verified live but not saved; see the task report).
+Screenshots: `docs/screenshots/themes/{light,synthwave,cyberpunk,vampire}-*.png` (all four verified live via the Settings picker; Default is `docs/screenshots/main-window.png`). Cyberpunk lyrics view, album page and track menu were viewed. The yellow player-bar edge is not visible in captures (no container has a bare `MiniPlayer` test id; the rule is harmless). Not verified for Cyberpunk: artist pages and the queue panel.
 
 ## What Amazon's DOM looks like (investigated Nov 2026, signed-in)
 
