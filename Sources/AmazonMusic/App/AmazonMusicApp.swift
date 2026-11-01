@@ -17,6 +17,7 @@ struct AmazonMusicApp: App {
         let p = PlayerState()
         let b = PlayerBridge(state: p)
         AppDelegate.pending = (p, b)
+        AppDelegate.pendingWeb = w
         let np = NowPlayingController(state: p, bridge: b)
         let nc = NotificationController(state: p, settings: s, dryRun: mode != .normal)
         nc.onOpenMainWindow = { MainWindowCoordinator.shared.open() }

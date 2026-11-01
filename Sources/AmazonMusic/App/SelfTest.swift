@@ -25,8 +25,16 @@ enum SelfTest {
         }
         report("sf-symbols", checkSymbols())
         report("menu-titles", checkMenuTitles())
+        report("url-router", checkURLRouter())
         report("integrations-smoke", await integrationsSmoke())
         return failed ? 1 : 0
+    }
+
+    static func checkURLRouter() -> String? {
+        for a in PlayerAction.allCases {
+            guard let u = URL(string: "amazonmusic://\(a.urlName)"), URLRouter.route(u) == .action(a) else { return "round-trip failed for \(a.urlName)" }
+        }
+        return nil
     }
 
     static func checkSymbols() -> String? {

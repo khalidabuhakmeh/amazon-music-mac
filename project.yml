@@ -39,6 +39,12 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.music
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: Sources/AmazonMusic/Resources/AmazonMusic.entitlements
+    info:
+      path: Sources/AmazonMusic/Resources/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.khalidabuhakmeh.amazonmusic
+            CFBundleURLSchemes: [amazonmusic]
     entitlements:
       path: Sources/AmazonMusic/Resources/AmazonMusic.entitlements
       properties:

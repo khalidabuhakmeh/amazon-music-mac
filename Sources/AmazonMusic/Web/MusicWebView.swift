@@ -154,6 +154,13 @@ final class WebController {
     func goHome() {
         load(URL(string: settings.startURL) ?? URL(string: AppSettings.defaultStartURL)!)
     }
+    /// Loads `https://music.amazon.com<path>` (path already validated by URLRouter). Re-checks host policy defensively.
+    func open(path: String) {
+        guard let url = URL(string: "https://" + URLRouter.allowedHost + path),
+              url.scheme == "https", url.host == URLRouter.allowedHost,
+              WebNavigationPolicy.shouldLoadInApp(url) else { return }
+        load(url)
+    }
     func load(_ url: URL) { webView.load(URLRequest(url: url)) }
 
     fileprivate var popups: [PopupWindowController] = []

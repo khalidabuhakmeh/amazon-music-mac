@@ -4,6 +4,8 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// App.init runs before the delegate exists; it parks references here and the delegate picks them up.
     static var pending: (player: PlayerState, bridge: PlayerBridge)?
+    static var pendingWeb: WebController?
+    private var pendingRoute: (route: URLRouter.Route, at: Date)?
     var player: PlayerState? { Self.pending?.player }
     var bridge: PlayerBridge? { Self.pending?.bridge }
 
@@ -40,6 +42,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.setActivationPolicy(.accessory)
             closeAllWindows()
             Task { @MainActor in exit(await SelfTest.run()) }
+        }
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard LaunchMode.current == .normal else { return }
+        for url in urls {
+            guard let route = URLRouter.route(url) else { continue }
+            if bridge?.isReady == true { run(route) } else { // single pending route; newest wins
+                pendingRoute = (route, Date())
+                bridge?.onReady = { [weak self] in self?.flushPendingRoute() }
+            }
+        }
+    }
+
+    private func flushPendingRoute() {
+        guard let p = pendingRoute else { return }
+        pendingRoute = nil
+        if Date().timeIntervalSince(p.at) <= 10 { run(p.route) }
+    }
+
+    private func run(_ route: URLRouter.Route) {
+        switch route {
+        case .action(let a): if let b = bridge { Task { await b.send(a.command) } }
+        case .open(let path):
+            MainWindowCoordinator.shared.open()
+            Self.pendingWeb?.open(path: path)
         }
     }
 

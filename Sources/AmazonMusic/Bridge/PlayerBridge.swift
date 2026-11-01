@@ -18,6 +18,10 @@ final class PlayerBridge {
     /// Host of the configured start URL (extra allowed message origin besides the preset music.amazon.* hosts).
     @ObservationIgnored var configuredHost: @MainActor () -> String? = { nil }
 
+    /// True once the page script has reported ready (for the current page load it stays true; used to defer URL-scheme actions).
+    @ObservationIgnored private(set) var isReady = false
+    @ObservationIgnored var onReady: (@MainActor () -> Void)?
+
     init(state: PlayerState) { self.state = state }
 
     /// Registers script + handler. MUST be called before the first page load.
@@ -50,7 +54,11 @@ final class PlayerBridge {
 
     func handle(body: Any) {
         let msg = BridgeMessage.decode(body: body)
-        if case .ready = msg { watchdog?.cancel(); watchdog = nil }
+        if case .ready = msg {
+            watchdog?.cancel(); watchdog = nil
+            isReady = true
+            onReady?()
+        }
         let before = (state.track?.identity, state.isPlaying, state.bridgeHealthy)
         state.apply(msg)
         switch msg {
