@@ -1,7 +1,6 @@
 import AppIntents
 import SwiftUI
 
-@main
 struct AmazonMusicApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var settings: AppSettings

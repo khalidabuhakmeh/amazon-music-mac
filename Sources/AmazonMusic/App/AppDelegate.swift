@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch LaunchMode.current {
         case .normal:
             statusMenu.start()
+            startAgentSocket()
         case .snapshot(let dir):
             NSApp.setActivationPolicy(.accessory)
             closeAllWindows()
@@ -43,6 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             closeAllWindows()
             Task { @MainActor in exit(await SelfTest.run()) }
         }
+    }
+
+    /// Normal launch only (never --snapshot/--selftest). Commands run here on the main actor.
+    private func startAgentSocket() {
+        guard let player, let bridge, let web = Self.pendingWeb else { return }
+        AgentRouter.context = AgentContext(player: player, bridge: bridge, web: web)
+        AgentSocket.listen { await AgentRouter.handle($0) }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

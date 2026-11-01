@@ -8,6 +8,8 @@
 - Fixtures live in `Sources/AmazonMusic/Model/PlayerStateFixtures.swift` (shared by #Previews, snapshot, selftest).
 - Tests: `xcodebuild test -scheme AmazonMusic -destination 'platform=macOS,arch=arm64' -derivedDataPath build`, `node tools/bridge-test/bridge.test.mjs`, `node tools/hidesections-test/hidesections.test.mjs`.
 
+Drive the app with `amazonmusic` (the app binary; `scripts/build.sh --open` links `~/.local/bin/amazonmusic`). See `.claude/skills/amazonmusic/SKILL.md`. Code: `Sources/AmazonMusic/Agent/` (commands in `AgentCommands.swift`; `Main.swift` dispatches CLI vs app, launch flags starting with `-` always mean the app). The socket `~/Library/Application Support/AmazonMusic/agent.sock` (dir 0700, socket 0600, peer uid checked, 64 KB line cap) starts in normal mode only, never in `--snapshot`/`--selftest`. `APP_AGENT_SOCKET=/tmp/x.sock` moves it. Security-sensitive: keep every command routed through `bridge.send`, validate inputs, never log request bodies. `~/.agents/skills/agent-cli/scripts/check-agent-cli.sh amazonmusic` runs the checks (starts a test copy; write commands need a signed-in session to verify manually).
+
 ## Scripts
 - `scripts/build.sh` — build only. `--open` also installs to `~/Applications/AmazonMusic.app` (file name must stay; display name comes from InfoPlist.strings), kills and relaunches it. `--selftest` builds then runs the binary's `--selftest`.
 - `scripts/snapshot.sh --baseline` writes `build/snapshots/baseline`; `scripts/snapshot.sh --diff` re-renders into `build/snapshots/current/` and prints changed pixels per file (`magick compare -metric AE -fuzz 8%`), exit 1 on any difference/missing file unless `--allow-diff`; exit 2 if ImageMagick is missing (`brew install imagemagick`).

@@ -26,5 +26,8 @@ if [ "$OPEN" = 1 ]; then
   rm -rf ~/Applications/AmazonMusic.app
   cp -R "$APP" ~/Applications/AmazonMusic.app
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -R -trusted ~/Applications/AmazonMusic.app
+  # The agent CLI: the app binary under a short name on PATH.
+  mkdir -p ~/.local/bin
+  ln -sf ~/Applications/AmazonMusic.app/Contents/MacOS/AmazonMusic ~/.local/bin/amazonmusic
   open ~/Applications/AmazonMusic.app
 fi
