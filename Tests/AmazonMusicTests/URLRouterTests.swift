@@ -1,23 +1,24 @@
-import XCTest
+import Testing
+import Foundation
 @testable import AmazonMusic
 
-final class URLRouterTests: XCTestCase {
+@Suite struct URLRouterTests {
     private func r(_ s: String) -> URLRouter.Route? { URL(string: s).flatMap(URLRouter.route) }
 
-    func testActions() {
-        for a in PlayerAction.allCases { XCTAssertEqual(r("amazonmusic://\(a.urlName)"), .action(a)) }
-        XCTAssertEqual(r("AmazonMusic://TOGGLE"), .action(.toggle))
-        XCTAssertEqual(r("amazonmusic://next/"), .action(.next))
+    @Test func testActions() {
+        for a in PlayerAction.allCases { #expect(r("amazonmusic://\(a.urlName)") == .action(a)) }
+        #expect(r("AmazonMusic://TOGGLE") == .action(.toggle))
+        #expect(r("amazonmusic://next/") == .action(.next))
     }
 
-    func testOpen() {
-        XCTAssertEqual(r("amazonmusic://open?path=/albums/B0123"), .open(path: "/albums/B0123"))
-        XCTAssertEqual(r("amazonmusic://open?path=/my/library"), .open(path: "/my/library"))
-        XCTAssertEqual(r("https://music.amazon.com/albums/B0123"), .open(path: "/albums/B0123"))
-        XCTAssertEqual(r("https://MUSIC.amazon.com/search/x?y=1"), .open(path: "/search/x?y=1"))
+    @Test func testOpen() {
+        #expect(r("amazonmusic://open?path=/albums/B0123") == .open(path: "/albums/B0123"))
+        #expect(r("amazonmusic://open?path=/my/library") == .open(path: "/my/library"))
+        #expect(r("https://music.amazon.com/albums/B0123") == .open(path: "/albums/B0123"))
+        #expect(r("https://MUSIC.amazon.com/search/x?y=1") == .open(path: "/search/x?y=1"))
     }
 
-    func testRejections() {
+    @Test func testRejections() {
         let bad = [
             "javascript:alert(1)",
             "amazonmusic://open?path=//evil.com",
@@ -54,10 +55,10 @@ final class URLRouterTests: XCTestCase {
             "http://music.amazon.com/",
             "file:///etc/passwd",
         ]
-        for s in bad { XCTAssertNil(r(s), s) }
+        for s in bad { #expect(r(s) == nil, "\(s)") }
     }
 
-    func testLengthBoundary() {
-        XCTAssertNotNil(r("amazonmusic://open?path=/" + String(repeating: "a", count: 511)))
+    @Test func testLengthBoundary() {
+        #expect(r("amazonmusic://open?path=/" + String(repeating: "a", count: 511)) != nil)
     }
 }

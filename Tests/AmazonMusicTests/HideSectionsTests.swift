@@ -1,85 +1,86 @@
-import XCTest
+import Testing
+import Foundation
 @testable import AmazonMusic
 
 @MainActor
-final class HideSectionsTests: XCTestCase {
+@Suite(.serialized) struct HideSectionsTests {
     private func makeDefaults() -> (UserDefaults, () -> Void) {
         let name = "hideSectionsTests-\(UUID().uuidString)"
         let d = UserDefaults(suiteName: name)!
         return (d, { d.removePersistentDomain(forName: name) })
     }
 
-    func testPodcastsSettingDefaultsOffAndPersists() {
+    @Test func testPodcastsSettingDefaultsOffAndPersists() {
         let (d, cleanup) = makeDefaults(); defer { cleanup() }
         let s = AppSettings(defaults: d)
-        XCTAssertFalse(s.hidePodcasts)
+        #expect(!(s.hidePodcasts))
         s.hidePodcasts = true
-        XCTAssertTrue(d.bool(forKey: "hidePodcasts"))
-        XCTAssertTrue(AppSettings(defaults: d).hidePodcasts)
+        #expect(d.bool(forKey: "hidePodcasts"))
+        #expect(AppSettings(defaults: d).hidePodcasts)
     }
 
-    func testAudibleSettingDefaultsOnWhenUnsetPersistsAndIsIndependent() {
+    @Test func testAudibleSettingDefaultsOnWhenUnsetPersistsAndIsIndependent() {
         let (d, cleanup) = makeDefaults(); defer { cleanup() }
         let s = AppSettings(defaults: d)
-        XCTAssertTrue(s.hideAudible)            // never set -> true
-        XCTAssertNil(d.object(forKey: "hideAudible"))
+        #expect(s.hideAudible)            // never set -> true
+        #expect(d.object(forKey: "hideAudible") == nil)
         s.hideAudible = false
-        XCTAssertFalse(AppSettings(defaults: d).hideAudible) // explicit choice respected
+        #expect(!(AppSettings(defaults: d).hideAudible)) // explicit choice respected
         s.hideAudible = true
-        XCTAssertTrue(d.bool(forKey: "hideAudible"))
-        XCTAssertFalse(d.bool(forKey: "hidePodcasts"))
-        XCTAssertFalse(AppSettings(defaults: d).hidePodcasts)
+        #expect(d.bool(forKey: "hideAudible"))
+        #expect(!(d.bool(forKey: "hidePodcasts")))
+        #expect(!(AppSettings(defaults: d).hidePodcasts))
     }
 
-    func testGetAppSettingDefaultsOnWhenUnsetAndPersists() {
+    @Test func testGetAppSettingDefaultsOnWhenUnsetAndPersists() {
         let (d, cleanup) = makeDefaults(); defer { cleanup() }
         let s = AppSettings(defaults: d)
-        XCTAssertTrue(s.hideGetApp)
+        #expect(s.hideGetApp)
         s.hideGetApp = false
-        XCTAssertFalse(d.bool(forKey: "hideGetApp"))
-        XCTAssertFalse(AppSettings(defaults: d).hideGetApp)
-        XCTAssertFalse(d.bool(forKey: "hidePodcasts"))
+        #expect(!(d.bool(forKey: "hideGetApp")))
+        #expect(!(AppSettings(defaults: d).hideGetApp))
+        #expect(!(d.bool(forKey: "hidePodcasts")))
     }
 
-    func testHomeBannerSettingDefaultsOnWhenUnsetAndPersists() {
+    @Test func testHomeBannerSettingDefaultsOnWhenUnsetAndPersists() {
         let (d, cleanup) = makeDefaults(); defer { cleanup() }
         let s = AppSettings(defaults: d)
-        XCTAssertNil(d.object(forKey: "hideHomeBanner"))
-        XCTAssertTrue(s.hideHomeBanner)
+        #expect(d.object(forKey: "hideHomeBanner") == nil)
+        #expect(s.hideHomeBanner)
         s.hideHomeBanner = false
-        XCTAssertFalse(d.bool(forKey: "hideHomeBanner"))
-        XCTAssertFalse(AppSettings(defaults: d).hideHomeBanner) // explicit off preserved
+        #expect(!(d.bool(forKey: "hideHomeBanner")))
+        #expect(!(AppSettings(defaults: d).hideHomeBanner)) // explicit off preserved
         s.hideHomeBanner = true
-        XCTAssertTrue(AppSettings(defaults: d).hideHomeBanner)
+        #expect(AppSettings(defaults: d).hideHomeBanner)
     }
 
-    func testExistingPersistedHidePodcastsKeepsWorking() {
+    @Test func testExistingPersistedHidePodcastsKeepsWorking() {
         let (d, cleanup) = makeDefaults(); defer { cleanup() }
         d.set(true, forKey: "hidePodcasts")
         let s = AppSettings(defaults: d)
-        XCTAssertTrue(s.hidePodcasts)
-        XCTAssertTrue(s.hideAudible)
+        #expect(s.hidePodcasts)
+        #expect(s.hideAudible)
     }
 
-    func testScriptSourcePrefixesFlags() {
-        XCTAssertEqual(HideSectionsScript.source(base: "X", podcasts: true, audible: false, getApp: true, homeBanner: true),
-                       "window.__amzHideSectionsInitial = {podcasts: true, audible: false, getApp: true, homeBanner: true};\nX")
-        XCTAssertTrue(HideSectionsScript.source(base: "X", podcasts: false, audible: true, getApp: false, homeBanner: false).hasPrefix("window.__amzHideSectionsInitial = {podcasts: false, audible: true, getApp: false, homeBanner: false};"))
+    @Test func testScriptSourcePrefixesFlags() {
+        #expect(HideSectionsScript.source(base: "X", podcasts: true, audible: false, getApp: true, homeBanner: true) == "window.__amzHideSectionsInitial = {podcasts: true, audible: false, getApp: true, homeBanner: true};\nX")
+        #expect(HideSectionsScript.source(base: "X", podcasts: false, audible: true, getApp: false, homeBanner: false).hasPrefix("window.__amzHideSectionsInitial = {podcasts: false, audible: true, getApp: false, homeBanner: false};"))
         let call = HideSectionsScript.applyCall(podcasts: true, audible: false, getApp: true, homeBanner: true)
-        XCTAssertTrue(call.contains("setEnabled('podcasts', true)"))
-        XCTAssertTrue(call.contains("setEnabled('audible', false)"))
-        XCTAssertTrue(call.contains("setEnabled('getApp', true)"))
-        XCTAssertTrue(call.contains("setEnabled('homeBanner', true)"))
+        #expect(call.contains("setEnabled('podcasts', true)"))
+        #expect(call.contains("setEnabled('audible', false)"))
+        #expect(call.contains("setEnabled('getApp', true)"))
+        #expect(call.contains("setEnabled('homeBanner', true)"))
     }
 
-    func testBundledScriptExposesBothSections() throws {
-        let url = try XCTUnwrap(Bundle(for: HideSectionsTests.self).url(forResource: "hideSections", withExtension: "js")
+    @Test func testBundledScriptExposesBothSections() throws {
+        let url = try #require(Bundle(for: BundleToken.self).url(forResource: "hideSections", withExtension: "js")
             ?? Bundle.main.url(forResource: "hideSections", withExtension: "js"))
         let src = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(src.contains("__amzHideSections"))
-        XCTAssertTrue(src.contains("audible:"))
-        XCTAssertTrue(src.contains("podcasts:"))
-        XCTAssertTrue(src.contains("getApp:"))
-        XCTAssertTrue(src.contains("homeBanner:"))
+        #expect(src.contains("__amzHideSections"))
+        #expect(src.contains("audible:"))
+        #expect(src.contains("podcasts:"))
+        #expect(src.contains("getApp:"))
+        #expect(src.contains("homeBanner:"))
     }
 }
+private final class BundleToken {}
